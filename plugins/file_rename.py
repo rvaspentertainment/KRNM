@@ -17,8 +17,8 @@ from io import BytesIO
 
 # Configuration for Jai Bajarangabali auto-upload
 JAI_BAJARANGABALI_CONFIG = {
-    "channel_id": -1001234567890,  # Replace with your channel ID (with -100 prefix)
-    "thumbnail_url": "https://your-image-url.com/bajarangabali-thumbnail.jpg",  # Replace with your image URL
+    "channel_id": -1002987317144,  # Replace with your channel ID (with -100 prefix)
+    "thumbnail_url": "https://envs.sh/zcf.jpg",  # Replace with your image URL
     "caption_template": "**Jai Bajarangabali Episode {episode}**\n\n📺 Quality: {quality}\n💾 Size: {filesize}\n⏱ Duration: {duration}"
 }
 
