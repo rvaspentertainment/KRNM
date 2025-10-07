@@ -343,24 +343,27 @@ async def cb_handler(client, query: CallbackQuery):
         
         elif data == "upload_settings":
             upload_as = await db.get_upload_as(user_id)
-            upload_channel = await db.get_upload_channel(user_id)
-            
-            upload_type_text = {"document": "📁 Document", "video": "🎥 Video", "audio": "🎵 Audio"}.get(upload_as, "📁 Document")
+            upload_channel = await db.get_upload_channel(user_id)            
+            upload_type_text = {
+                "document": "📁 Document", 
+                "video": "🎥 Video", 
+                "audio": "🎵 Audio"
+            }.get(upload_as, "📁 Document")
             channel_text = f"Set: `{upload_channel}`" if upload_channel else "Not Set"
-            
             await query.message.edit_text(
                 text=f"**📤 Upload Settings**\n\n**Upload As:** {upload_type_text}\n**Channel:** {channel_text}",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📁 Document", callback_data="set_upload_document"),
-                    InlineKeyboardButton("🎥 Video", callback_data="set_upload_video")
-                    ],[
-                    InlineKeyboardButton("🎵 Audio", callback_data="set_upload_audio")
-                    ],[
+                    InlineKeyboardButton("📁 Document", callback_data="upload_type_document"),
+                    InlineKeyboardButton("🎥 Video", callback_data="upload_type_video")
+                ],[
+                    InlineKeyboardButton("🎵 Audio", callback_data="upload_type_audio")
+                ],[
                     InlineKeyboardButton("📢 Set Channel", callback_data="set_upload_channel")
-                    ],[
+                ],[
                     InlineKeyboardButton("◀️ Back", callback_data="settings")
                 ]])
             )
+
         
         elif data in ["set_upload_document", "set_upload_video", "set_upload_audio"]:
             upload_type = data.split("_")[2]
