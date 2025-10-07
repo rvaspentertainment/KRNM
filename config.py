@@ -122,33 +122,40 @@ Join us :- @TG_UPDATES1 </b>"""
 
 𝚃𝙷𝙰𝙽𝙺 𝚈𝙾𝚄 𝙰𝙻𝙻 🫶</b>"""
     
-    RENAME_MODE_TXT = """<b>
-🔧 <u>Rᴇɴᴀᴍᴇ Mᴏᴅᴇ Sᴇᴛᴛɪɴɢꜱ</u>
+    AUTO_SETTINGS_TXT = """**⚙️ Auto Rename Settings**
 
-Cᴜʀʀᴇɴᴛ Mᴏᴅᴇ: <code>{mode}</code>
+**Detection Settings:**
+├ Media Type: {detect_type}
+├ Language: {detect_lang}
+├ Year: {detect_year}
+├ Quality: {detect_quality}
+├ Source: {detect_source}
+├ OTT Platform: {detect_ott}
+├ Encoding: {detect_encoding}
+└ Audio Format: {detect_audio}
 
-📌 <b>Mᴀɴᴜᴀʟ Mᴏᴅᴇ:</b>
-• Yᴏᴜ ᴡɪʟʟ ʙᴇ ᴀꜱᴋᴇᴅ ᴛᴏ ᴇɴᴛᴇʀ ᴀ ɴᴇᴡ ɴᴀᴍᴇ ꜰᴏʀ ᴇᴀᴄʜ ꜰɪʟᴇ
+**Quality:** {quality}
+**Auto Clean:** {auto_clean}
 
-🤖 <b>Aᴜᴛᴏ Mᴏᴅᴇ:</b>
-• Aᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟy ᴅᴇᴛᴇᴄᴛꜱ ᴀɴᴅ ᴄʟᴇᴀɴꜱ ꜰɪʟᴇɴᴀᴍᴇꜱ
-• Rᴇᴍᴏᴠᴇꜱ ᴜɴᴡᴀɴᴛᴇᴅ ᴡᴏʀᴅꜱ
-• Dᴇᴛᴇᴄᴛꜱ ʟᴀɴɢᴜᴀɢᴇ, Qᴜᴀʟɪᴛy, ᴍᴇᴅɪᴀ ᴛyᴩᴇ
-• Aᴘᴘʟɪᴇꜱ ᴄᴜꜱᴛᴏᴍ ʀᴜʟᴇꜱ
-
-Cʜᴏᴏꜱᴇ ʏᴏᴜʀ ᴘʀᴇꜰᴇʀʀᴇᴅ ᴍᴏᴅᴇ:</b>"""
+**Customization:**
+├ Prefix: `{prefix}`
+├ Suffix: `{suffix}`
+├ Remove Words: `{remove_words}`
+└ Replace Words: `{replace_words}`"""
     
-    AUTO_SETTINGS_TXT = """<b>
-⚙️ <u>Aᴜᴛᴏ Rᴇɴᴀᴍᴇ Sᴇᴛᴛɪɴɢꜱ</u>
+    RENAME_MODE_TXT = """**🔧 Rename Mode Settings**
 
-🔹 Aᴜᴛᴏ Dᴇᴛᴇᴄᴛ Tyᴘᴇ: <code>{detect_type}</code>
-🔹 Aᴜᴛᴏ Dᴇᴛᴇᴄᴛ Lᴀɴɢᴜᴀɢᴇ: <code>{detect_lang}</code>
-🔹 Qᴜᴀʟɪᴛy Fᴏʀᴍᴀᴛ: <code>{quality}</code>
-🔹 Aᴜᴛᴏ Cʟᴇᴀɴ: <code>{auto_clean}</code>
-🔹 Pʀᴇꜰɪx: <code>{prefix}</code>
-🔹 Sᴜꜰꜰɪx: <code>{suffix}</code>
-🔹 Rᴇᴍᴏᴠᴇ Wᴏʀᴅꜱ: <code>{remove_words}</code>
-🔹 Rᴇᴘʟᴀᴄᴇ Wᴏʀᴅꜱ: <code>{replace_words}</code>
+**Current Mode:** {mode}
 
-Cᴏɴꜰɪɢᴜʀᴇ ʏᴏᴜʀ ᴀᴜᴛᴏ-ʀᴇɴᴀᴍᴇ ꜱᴇᴛᴛɪɴɢꜱ:</b>"""
+**📝 Manual Mode:**
+• You will be asked to enter a new name for each file
+
+**🤖 Auto Mode:**
+• Automatically detects and cleans filenames
+• Removes unwanted words
+• Detects language, quality, media type, etc.
+• Applies custom rules
+
+Choose your preferred mode:"""
+
 
