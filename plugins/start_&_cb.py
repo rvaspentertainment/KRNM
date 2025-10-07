@@ -334,83 +334,107 @@ async def cb_handler(client, query: CallbackQuery):
                     ],[
                     InlineKeyboardButton('🔧 𝐑𝐄𝐍𝐀𝐌𝐄 𝐌𝐎𝐃𝐄', callback_data='rename_mode')
                     ],[
+                    InlineKeyboardButton('📤 𝐔𝐏𝐋𝐎𝐀𝐃 𝐒𝐄𝐓𝐓𝐈𝐍𝐆𝐒', callback_data='upload_settings')
+                    ],[
                     InlineKeyboardButton("🔒 Cʟᴏꜱᴇ", callback_data="close"),
                     InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="start")
                 ]])            
             )
         
-        elif data == "cap":
-            await query.message.edit_text(
-                text=Txt.CAP_TXT,
-                disable_web_page_preview=True,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔒 Cʟᴏꜱᴇ", callback_data="close"),
-                    InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="settings")
-                ]])            
-            )
-        
-        elif data == "thumbnail":
-            await query.message.edit_text(
-                text=Txt.THUMBNAIL_TXT.format(client.mention),
-                disable_web_page_preview=True,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔒 Cʟᴏꜱᴇ", callback_data="close"),
-                    InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="settings")
-                ]])            
-            )
-        
-        elif data == "rename_mode":
-            current_mode = await db.get_rename_mode(user_id)
-            mode_emoji = "🤖" if current_mode == "auto" else "📝"
+        elif data == "upload_settings":
+            upload_as = await db.get_upload_as(user_id)
+            upload_channel = await db.get_upload_channel(user_id)
+            
+            upload_type_text = {"document": "📁 Document", "video": "🎥 Video", "audio": "🎵 Audio"}.get(upload_as, "📁 Document")
+            channel_text = f"Set: `{upload_channel}`" if upload_channel else "Not Set"
             
             await query.message.edit_text(
-                text=Txt.RENAME_MODE_TXT.format(mode=f"{mode_emoji} {current_mode.upper()}"),
-                disable_web_page_preview=True,
+                text=f"**📤 Upload Settings**\n\n**Upload As:** {upload_type_text}\n**Channel:** {channel_text}",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📝 Mᴀɴᴜᴀʟ", callback_data="set_manual_mode"),
-                    InlineKeyboardButton("🤖 Aᴜᴛᴏ", callback_data="set_auto_mode")
+                    InlineKeyboardButton("📁 Document", callback_data="set_upload_document"),
+                    InlineKeyboardButton("🎥 Video", callback_data="set_upload_video")
                     ],[
-                    InlineKeyboardButton("⚙️ Aᴜᴛᴏ Sᴇᴛᴛɪɴɢꜱ", callback_data="auto_settings")
+                    InlineKeyboardButton("🎵 Audio", callback_data="set_upload_audio")
                     ],[
-                    InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="settings")
+                    InlineKeyboardButton("📢 Set Channel", callback_data="set_upload_channel")
+                    ],[
+                    InlineKeyboardButton("◀️ Back", callback_data="settings")
                 ]])
             )
         
-        elif data == "set_manual_mode":
-            await db.set_rename_mode(user_id, "manual")
-            await query.answer("✅ Sᴇᴛ ᴛᴏ Mᴀɴᴜᴀʟ Mᴏᴅᴇ", show_alert=True)
-            await cb_handler(client, CallbackQuery(client=client, id=query.id, from_user=query.from_user, message=query.message, data="rename_mode"))
+        elif data in ["set_upload_document", "set_upload_video", "set_upload_audio"]:
+            upload_type = data.split("_")[2]
+            await db.set_upload_as(user_id, upload_type)
+            await query.answer(f"✅ Upload as {upload_type.upper()}", show_alert=True)
+            await cb_handler(client, CallbackQuery(client=client, id=query.id, from_user=query.from_user, message=query.message, data="upload_settings"))
         
-        elif data == "set_auto_mode":
-            await db.set_rename_mode(user_id, "auto")
-            await query.answer("✅ Sᴇᴛ ᴛᴏ Aᴜᴛᴏ Mᴏᴅᴇ", show_alert=True)
+        elif data == "set_upload_channel":
+            user_setting_state[user_id] = "upload_channel"
+            await query.message.edit_text(
+                "**Send Channel ID or Username:**\n\nExample: `-1001234567890` or `@username`\n\n/cancel to cancel",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Clear Channel", callback_data="clear_upload_channel")
+                ]])
+            )
+        
+        elif data == "clear_upload_channel":
+            await db.set_upload_channel(user_id, None)
+            await query.answer("✅ Channel Cleared", show_alert=True)
+            if user_id in user_setting_state:
+                del user_setting_state[user_id]
+            await cb_handler(client, CallbackQuery(client=client, id=query.id, from_user=query.from_user, message=query.message, data="upload_settings"))
+        
+        elif data == "rename_mode":
+            current_mode = await db.get_rename_mode(user_id)
+            always_ask = await db.get_always_ask(user_id)
+            mode_emoji = "🤖" if current_mode == "auto" else "📝"
+            ask_emoji = "✅" if always_ask else "❌"
+            
+            await query.message.edit_text(
+                text=f"**🔧 Rename Mode Settings**\n\n**Current Mode:** {mode_emoji} {current_mode.upper()}\n**Always Ask:** {ask_emoji}",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("📝 Manual", callback_data="set_manual_mode"),
+                    InlineKeyboardButton("🤖 Auto", callback_data="set_auto_mode")
+                    ],[
+                    InlineKeyboardButton(f"{ask_emoji} Confirm", callback_data="toggle_always_ask")
+                    ],[
+                    InlineKeyboardButton("⚙️ Auto Settings", callback_data="auto_settings")
+                    ],[
+                    InlineKeyboardButton("◀️ Back", callback_data="settings")
+                ]])
+            )
+        
+        elif data == "toggle_always_ask":
+            current = await db.get_always_ask(user_id)
+            await db.set_always_ask(user_id, not current)
+            await query.answer(f"✅ Confirm: {'ON' if not current else 'OFF'}", show_alert=True)
             await cb_handler(client, CallbackQuery(client=client, id=query.id, from_user=query.from_user, message=query.message, data="rename_mode"))
         
         elif data == "auto_settings":
             await show_auto_settings(client, query)
         
-        elif data in ["toggle_detect_type", "toggle_detect_lang", "toggle_auto_clean"]:
+        elif data in ["toggle_auto_detect_all", "toggle_auto_clean"]:
             await handle_toggle(client, query, data)
         
         elif data == "set_quality":
             await query.message.edit_text(
-                text="<b>Sᴇʟᴇᴄᴛ Qᴜᴀʟɪᴛy Fᴏʀᴍᴀᴛ:</b>",
+                text="**🎞️ Select Quality Format:**",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("Kᴇᴇᴘ", callback_data="quality_keep"),
-                    InlineKeyboardButton("Rᴇᴍᴏᴠᴇ", callback_data="quality_remove")
+                    InlineKeyboardButton("Keep Original", callback_data="quality_keep"),
+                    InlineKeyboardButton("Remove", callback_data="quality_remove")
                     ],[
-                    InlineKeyboardButton("480ᴘ", callback_data="quality_480p"),
-                    InlineKeyboardButton("720ᴘ", callback_data="quality_720p"),
-                    InlineKeyboardButton("1080ᴘ", callback_data="quality_1080p")
+                    InlineKeyboardButton("480p", callback_data="quality_480p"),
+                    InlineKeyboardButton("720p", callback_data="quality_720p"),
+                    InlineKeyboardButton("1080p", callback_data="quality_1080p")
                     ],[
-                    InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="auto_settings")
+                    InlineKeyboardButton("◀️ Back", callback_data="auto_settings")
                 ]])
             )
         
         elif data.startswith("quality_"):
             quality = data.split("_")[1]
             await db.set_quality_format(user_id, quality)
-            await query.answer(f"✅ Qᴜᴀʟɪᴛy: {quality.upper()}", show_alert=True)
+            await query.answer(f"✅ Quality: {quality.upper()}", show_alert=True)
             await show_auto_settings(client, query)
         
         elif data in ["set_prefix", "set_suffix", "set_remove_words", "set_replace_words"]:
@@ -436,54 +460,48 @@ async def cb_handler(client, query: CallbackQuery):
         except:
             pass
 
-
 async def show_auto_settings(client, query):
     """Show auto settings page"""
     try:
         user_id = query.from_user.id
         settings = await db.get_all_rename_settings(user_id)
         
-        detect_type = "✅" if settings['auto_detect_type'] else "❌"
-        detect_lang = "✅" if settings['auto_detect_language'] else "❌"
+        # Single toggle for all auto detection
+        auto_detect = settings['auto_detect_language'] and settings['auto_detect_year'] and settings['auto_detect_quality']
+        detect_emoji = "✅" if auto_detect else "❌"
         auto_clean = "✅" if settings['auto_clean'] else "❌"
         quality = settings['quality_format']
-        prefix = settings['prefix'] if settings['prefix'] else "None"
-        suffix = settings['suffix'] if settings['suffix'] else "None"
+        prefix = settings['prefix'][:20] if settings['prefix'] else "None"
+        suffix = settings['suffix'][:20] if settings['suffix'] else "None"
         
-        remove_words = ', '.join(settings['remove_words'][:5]) if settings['remove_words'] else "None"
-        if len(settings['remove_words']) > 5:
-            remove_words += f"... (+{len(settings['remove_words'])-5})"
-        
-        replace_words = ', '.join([f"{k}→{v}" for k, v in list(settings['replace_words'].items())[:3]]) if settings['replace_words'] else "None"
-        if len(settings['replace_words']) > 3:
-            replace_words += f"... (+{len(settings['replace_words'])-3})"
+        remove_count = len(settings['remove_words'])
+        replace_count = len(settings['replace_words'])
         
         text = f"""**⚙️ Auto Rename Settings**
 
-**Detection:**
-├ Type: {detect_type} | Lang: {detect_lang}
-└ Auto Clean: {auto_clean}
-
+**Auto Detect:** {detect_emoji} (Year, Lang, Quality, etc.)
+**Auto Clean:** {auto_clean}
 **Quality:** {quality}
-**Prefix:** `{prefix}`
-**Suffix:** `{suffix}`
-**Remove:** `{remove_words}`
-**Replace:** `{replace_words}`"""
+
+**Customization:**
+├ Prefix: `{prefix}`
+├ Suffix: `{suffix}`
+├ Remove Words: {remove_count} words
+└ Replace Words: {replace_count} pairs"""
         
         await query.message.edit_text(
             text=text,
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(f"{detect_type} Type", callback_data="toggle_detect_type"),
-                InlineKeyboardButton(f"{detect_lang} Lang", callback_data="toggle_detect_lang")
-                ],[
-                InlineKeyboardButton("🎞️ Quality", callback_data="set_quality"),
+                InlineKeyboardButton(f"{detect_emoji} Auto Detect", callback_data="toggle_auto_detect_all"),
                 InlineKeyboardButton(f"{auto_clean} Clean", callback_data="toggle_auto_clean")
+                ],[
+                InlineKeyboardButton("🎞️ Quality", callback_data="set_quality")
                 ],[
                 InlineKeyboardButton("➕ Prefix", callback_data="set_prefix"),
                 InlineKeyboardButton("➕ Suffix", callback_data="set_suffix")
                 ],[
-                InlineKeyboardButton("🗑️ Remove", callback_data="set_remove_words"),
-                InlineKeyboardButton("🔄 Replace", callback_data="set_replace_words")
+                InlineKeyboardButton(f"🗑️ Remove ({remove_count})", callback_data="set_remove_words"),
+                InlineKeyboardButton(f"🔄 Replace ({replace_count})", callback_data="set_replace_words")
                 ],[
                 InlineKeyboardButton("◀️ Back", callback_data="rename_mode")
             ]])
@@ -497,18 +515,23 @@ async def handle_toggle(client, query, data):
     try:
         user_id = query.from_user.id
         
-        if data == "toggle_detect_type":
-            current = await db.get_auto_detect_type(user_id)
-            await db.set_auto_detect_type(user_id, not current)
-            await query.answer(f"✅ Detect Type: {'OFF' if current else 'ON'}", show_alert=True)
-        elif data == "toggle_detect_lang":
+        if data == "toggle_auto_detect_all":
+            # Toggle all detection settings at once
             current = await db.get_auto_detect_language(user_id)
-            await db.set_auto_detect_language(user_id, not current)
-            await query.answer(f"✅ Detect Lang: {'OFF' if current else 'ON'}", show_alert=True)
+            new_value = not current
+            await db.set_auto_detect_type(user_id, new_value)
+            await db.set_auto_detect_language(user_id, new_value)
+            await db.set_auto_detect_year(user_id, new_value)
+            await db.set_auto_detect_quality(user_id, new_value)
+            await db.set_auto_detect_source(user_id, new_value)
+            await db.set_auto_detect_ott(user_id, new_value)
+            await db.set_auto_detect_encoding(user_id, new_value)
+            await db.set_auto_detect_audio(user_id, new_value)
+            await query.answer(f"✅ Auto Detect: {'ON' if new_value else 'OFF'}", show_alert=True)
         elif data == "toggle_auto_clean":
             current = await db.get_auto_clean(user_id)
             await db.set_auto_clean(user_id, not current)
-            await query.answer(f"✅ Auto Clean: {'OFF' if current else 'ON'}", show_alert=True)
+            await query.answer(f"✅ Auto Clean: {'ON' if not current else 'OFF'}", show_alert=True)
         
         await show_auto_settings(client, query)
     except Exception as e:
@@ -521,17 +544,17 @@ async def initiate_input(client, query, data):
         user_id = query.from_user.id
         setting = data.replace("set_", "")
         
-        user_states[user_id] = setting
+        user_setting_state[user_id] = setting
         
         messages = {
-            "prefix": "Send me the prefix:\n\nExample: `@YourChannel`\n\n/cancel to cancel",
-            "suffix": "Send me the suffix:\n\nExample: `@YourChannel`\n\n/cancel to cancel",
-            "remove_words": "Send words to remove (comma separated):\n\nExample: `hdcam, sample, x264`\n\n/cancel to cancel",
-            "replace_words": "Send replacement pairs:\n\nFormat: `old:new, old2:new2`\n\nExample: `tamil:kannada, 480p:720p`\n\n/cancel to cancel"
+            "prefix": "**Send me the prefix:**\n\nExample: `@YourChannel`\n\n/cancel to cancel",
+            "suffix": "**Send me the suffix:**\n\nExample: `@YourChannel`\n\n/cancel to cancel",
+            "remove_words": "**Send words to remove (comma separated):**\n\nExample: `hdcam, sample, x264, torrent`\n\n/cancel to cancel",
+            "replace_words": "**Send replacement pairs:**\n\nFormat: `old:new, old2:new2`\n\nExample: `tamil:kannada, english:hindi, 480p:720p`\n\n/cancel to cancel"
         }
         
         await query.message.edit_text(
-            f"**{messages[setting]}**",
+            messages[setting],
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("❌ Cancel", callback_data=f"clear_{setting}")
             ]])
@@ -558,8 +581,8 @@ async def handle_clear(client, query, data):
             await db.set_replace_words(user_id, {})
             await query.answer("✅ Replace Words Cleared", show_alert=True)
         
-        if user_id in user_states:
-            del user_states[user_id]
+        if user_id in user_setting_state:
+            del user_setting_state[user_id]
         
         await show_auto_settings(client, query)
     except Exception as e:
