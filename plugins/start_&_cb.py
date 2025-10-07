@@ -4,7 +4,222 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceRepl
 from pyrogram.errors import MessageNotModified, MessageDeleteForbidden, QueryIdInvalid, UserIsBlocked
 from helper.database import db
 from config import Config, Txt  
-  
+
+
+from pyrogram import Client, filters
+from pyrogram.types import Message
+from pyrogram.errors import (
+    ApiIdInvalid, 
+    PhoneNumberInvalid, 
+    PhoneCodeInvalid, 
+    PhoneCodeExpired,
+    SessionPasswordNeeded,
+    PasswordHashInvalid
+)
+import asyncio
+
+# Dictionary to store user session generation states
+user_states = {}
+
+class SessionState:
+    def __init__(self):
+        self.api_id = None
+        self.api_hash = None
+        self.phone = None
+        self.client = None
+        self.phone_code_hash = None
+
+@Client.on_message(filters.private & filters.command("string"))
+async def generate_string_session(client, message: Message):
+    user_id = message.from_user.id
+    
+    try:
+        await message.reply_text(
+            "<b>📱 STRING SESSION GENERATOR</b>\n\n"
+            "⚠️ <b>WARNING:</b> Never share your string session with anyone!\n\n"
+            "Please send your <b>API_ID</b>\n\n"
+            "Get it from: https://my.telegram.org",
+            disable_web_page_preview=True
+        )
+        
+        # Initialize state for this user
+        user_states[user_id] = SessionState()
+        user_states[user_id].step = "api_id"
+        
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+
+
+@Client.on_message(filters.private & filters.text & ~filters.command(["start", "cancel", "string"]))
+async def handle_string_session_steps(client, message: Message):
+    user_id = message.from_user.id
+    
+    # Check if user is in string session generation process
+    if user_id not in user_states:
+        return
+    
+    state = user_states[user_id]
+    text = message.text.strip()
+    
+    try:
+        # Step 1: Receive API_ID
+        if state.step == "api_id":
+            if not text.isdigit():
+                await message.reply_text("❌ API_ID must be a number. Please send a valid API_ID:")
+                return
+            
+            state.api_id = int(text)
+            state.step = "api_hash"
+            await message.reply_text(
+                "✅ API_ID received!\n\n"
+                "Now send your <b>API_HASH</b>"
+            )
+        
+        # Step 2: Receive API_HASH
+        elif state.step == "api_hash":
+            state.api_hash = text
+            state.step = "phone"
+            await message.reply_text(
+                "✅ API_HASH received!\n\n"
+                "Now send your <b>Phone Number</b> with country code\n"
+                "Example: +1234567890"
+            )
+        
+        # Step 3: Receive Phone Number
+        elif state.step == "phone":
+            state.phone = text
+            
+            try:
+                # Create client and send OTP
+                state.client = Client(
+                    name=f"session_{user_id}",
+                    api_id=state.api_id,
+                    api_hash=state.api_hash,
+                    in_memory=True
+                )
+                
+                await state.client.connect()
+                code = await state.client.send_code(state.phone)
+                state.phone_code_hash = code.phone_code_hash
+                state.step = "otp"
+                
+                await message.reply_text(
+                    "✅ OTP sent to your Telegram account!\n\n"
+                    "Please send the <b>OTP code</b> you received.\n"
+                    "Example: 12345"
+                )
+                
+            except ApiIdInvalid:
+                await message.reply_text("❌ Invalid API_ID or API_HASH. Please start again with /string")
+                await cleanup_session(user_id)
+            except PhoneNumberInvalid:
+                await message.reply_text("❌ Invalid phone number. Please start again with /string")
+                await cleanup_session(user_id)
+            except Exception as e:
+                await message.reply_text(f"❌ Error: {str(e)}\n\nPlease start again with /string")
+                await cleanup_session(user_id)
+        
+        # Step 4: Receive OTP
+        elif state.step == "otp":
+            otp = text.replace(" ", "")
+            
+            try:
+                await state.client.sign_in(
+                    state.phone,
+                    state.phone_code_hash,
+                    otp
+                )
+                
+                # Get string session
+                string_session = await state.client.export_session_string()
+                
+                await message.reply_text(
+                    "✅ <b>String Session Generated Successfully!</b>\n\n"
+                    f"<code>{string_session}</code>\n\n"
+                    "⚠️ <b>Keep this safe and never share it with anyone!</b>",
+                    disable_web_page_preview=True
+                )
+                
+                await cleanup_session(user_id)
+                
+            except PhoneCodeInvalid:
+                await message.reply_text(
+                    "❌ Invalid OTP code. Please try again.\n"
+                    "Send the correct OTP:"
+                )
+            except PhoneCodeExpired:
+                await message.reply_text(
+                    "❌ OTP has expired. Please start again with /string"
+                )
+                await cleanup_session(user_id)
+            except SessionPasswordNeeded:
+                state.step = "2fa"
+                await message.reply_text(
+                    "🔐 Your account has 2FA enabled.\n\n"
+                    "Please send your <b>2FA Password</b>:"
+                )
+            except Exception as e:
+                await message.reply_text(f"❌ Error: {str(e)}")
+                await cleanup_session(user_id)
+        
+        # Step 5: Receive 2FA Password (if enabled)
+        elif state.step == "2fa":
+            password = text
+            
+            try:
+                await state.client.check_password(password)
+                
+                # Get string session
+                string_session = await state.client.export_session_string()
+                
+                await message.reply_text(
+                    "✅ <b>String Session Generated Successfully!</b>\n\n"
+                    f"<code>{string_session}</code>\n\n"
+                    "⚠️ <b>Keep this safe and never share it with anyone!</b>",
+                    disable_web_page_preview=True
+                )
+                
+                await cleanup_session(user_id)
+                
+            except PasswordHashInvalid:
+                await message.reply_text(
+                    "❌ Invalid 2FA password. Please try again.\n"
+                    "Send the correct password:"
+                )
+            except Exception as e:
+                await message.reply_text(f"❌ Error: {str(e)}")
+                await cleanup_session(user_id)
+    
+    except Exception as e:
+        await message.reply_text(f"❌ An error occurred: {str(e)}")
+        await cleanup_session(user_id)
+
+
+@Client.on_message(filters.private & filters.command("cancel"))
+async def cancel_string_generation(client, message: Message):
+    user_id = message.from_user.id
+    
+    if user_id in user_states:
+        await cleanup_session(user_id)
+        await message.reply_text("✅ String session generation cancelled.")
+    else:
+        await message.reply_text("❌ No active session generation to cancel.")
+
+
+async def cleanup_session(user_id):
+    """Clean up session generation state"""
+    if user_id in user_states:
+        state = user_states[user_id]
+        
+        # Disconnect and clean up client if exists
+        if state.client:
+            try:
+                await state.client.disconnect()
+            except:
+                pass
+        
+        # Remove user state
+        del user_states[user_id]
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message):
