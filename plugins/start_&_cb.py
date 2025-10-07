@@ -342,55 +342,68 @@ async def cb_handler(client, query: CallbackQuery):
             )
         
         elif data == "upload_settings":
-            upload_as = await db.get_upload_as(user_id)
-            upload_channel = await db.get_upload_channel(user_id)            
-            upload_type_text = {
-                "document": "📁 Document", 
-                "video": "🎥 Video", 
-                "audio": "🎵 Audio"
-            }.get(upload_as, "📁 Document")
-            channel_text = f"Set: `{upload_channel}`" if upload_channel else "Not Set"
-            await query.message.edit_text(
-                text=f"**📤 Upload Settings**\n\n**Upload As:** {upload_type_text}\n**Channel:** {channel_text}",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📁 Document", callback_data="upload_type_document"),
-                    InlineKeyboardButton("🎥 Video", callback_data="upload_type_video")
-                ],[
-                    InlineKeyboardButton("🎵 Audio", callback_data="upload_type_audio")
-                ],[
-                    InlineKeyboardButton("📢 Set Channel", callback_data="set_upload_channel")
-                ],[
-                    InlineKeyboardButton("◀️ Back", callback_data="settings")
-                ]])
-            )
+            try:
+                upload_as = await db.get_upload_as(user_id)
+                upload_channel = await db.get_upload_channel(user_id)
+                
+                upload_type_text = {
+                    "document": "📁 Document", 
+                    "video": "🎥 Video", 
+                    "audio": "🎵 Audio"
+                }.get(upload_as, "📁 Document")
+                
+                channel_text = f"Set: `{upload_channel}`" if upload_channel else "Not Set"
+                
+                await query.message.edit_text(
+                    text=f"**📤 Upload Settings**\n\n**Upload As:** {upload_type_text}\n**Channel:** {channel_text}",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("📁 Document", callback_data="upload_type_document"),
+                        InlineKeyboardButton("🎥 Video", callback_data="upload_type_video")
+                    ],[
+                        InlineKeyboardButton("🎵 Audio", callback_data="upload_type_audio")
+                    ],[
+                        InlineKeyboardButton("📢 Set Channel", callback_data="set_upload_channel")
+                    ],[
+                        InlineKeyboardButton("◀️ Back", callback_data="settings")
+                    ]])
+                )
+            except Exception as e:
+                print(f"Error in upload_settings: {e}")
+                await query.answer(f"❌ Error: {e}", show_alert=True)
             
         elif data.startswith("upload_type_"):
             upload_type = data.replace("upload_type_", "")
             await db.set_upload_as(user_id, upload_type)
-            await query.answer(f"✅ Upload as {upload_type.upper()}", show_alert=True)   
-            # Recreate the callback to refresh
-            from pyrogram.types import CallbackQuery as CQ
-            new_query = CQ(
-                client=client,
-                id=query.id,
-                from_user=query.from_user,
-                message=query.message,
-                data="upload_settings"
-            )
-            await cb_handler(client, new_query)
-        
-        elif data in ["set_upload_document", "set_upload_video", "set_upload_audio"]:
-            upload_type = data.split("_")[2]
-            await db.set_upload_as(user_id, upload_type)
             await query.answer(f"✅ Upload as {upload_type.upper()}", show_alert=True)
-            await cb_handler(client, CallbackQuery(client=client, id=query.id, from_user=query.from_user, message=query.message, data="upload_settings"))
+            
+            # Refresh upload settings page
+            await query.message.edit_text(
+                text="♻️ Refreshing...",
+                reply_markup=None
+            )
+            
+            # Call upload_settings again to refresh
+            from pyrogram.types import CallbackQuery as CQ
+            refresh_query = type('obj', (object,), {
+                'data': 'upload_settings',
+                'from_user': query.from_user,
+                'message': query.message,
+                'id': query.id
+            })()
+            await cb_handler(client, refresh_query)
         
         elif data == "set_upload_channel":
             user_setting_state[user_id] = "upload_channel"
             await query.message.edit_text(
-                "**Send Channel ID or Username:**\n\nExample: `-1001234567890` or `@username`\n\n/cancel to cancel",
+                "**📢 Send Channel ID or Username:**\n\n"
+                "Examples:\n"
+                "• `-1001234567890`\n"
+                "• `@username`\n\n"
+                "Send /cancel to cancel",
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("❌ Clear Channel", callback_data="clear_upload_channel")
+                ],[
+                    InlineKeyboardButton("◀️ Back", callback_data="upload_settings")
                 ]])
             )
         
@@ -399,7 +412,16 @@ async def cb_handler(client, query: CallbackQuery):
             await query.answer("✅ Channel Cleared", show_alert=True)
             if user_id in user_setting_state:
                 del user_setting_state[user_id]
-            await cb_handler(client, CallbackQuery(client=client, id=query.id, from_user=query.from_user, message=query.message, data="upload_settings"))
+            
+            # Refresh page
+            from pyrogram.types import CallbackQuery as CQ
+            refresh_query = type('obj', (object,), {
+                'data': 'upload_settings',
+                'from_user': query.from_user,
+                'message': query.message,
+                'id': query.id
+            })()
+            await cb_handler(client, refresh_query)
         
         elif data == "rename_mode":
             current_mode = await db.get_rename_mode(user_id)
@@ -421,11 +443,42 @@ async def cb_handler(client, query: CallbackQuery):
                 ]])
             )
         
+        elif data == "set_manual_mode":
+            await db.set_rename_mode(user_id, "manual")
+            await query.answer("✅ Manual Mode Enabled", show_alert=True)
+            # Refresh
+            refresh_query = type('obj', (object,), {
+                'data': 'rename_mode',
+                'from_user': query.from_user,
+                'message': query.message,
+                'id': query.id
+            })()
+            await cb_handler(client, refresh_query)
+        
+        elif data == "set_auto_mode":
+            await db.set_rename_mode(user_id, "auto")
+            await query.answer("✅ Auto Mode Enabled", show_alert=True)
+            # Refresh
+            refresh_query = type('obj', (object,), {
+                'data': 'rename_mode',
+                'from_user': query.from_user,
+                'message': query.message,
+                'id': query.id
+            })()
+            await cb_handler(client, refresh_query)
+        
         elif data == "toggle_always_ask":
             current = await db.get_always_ask(user_id)
             await db.set_always_ask(user_id, not current)
             await query.answer(f"✅ Confirm: {'ON' if not current else 'OFF'}", show_alert=True)
-            await cb_handler(client, CallbackQuery(client=client, id=query.id, from_user=query.from_user, message=query.message, data="rename_mode"))
+            # Refresh
+            refresh_query = type('obj', (object,), {
+                'data': 'rename_mode',
+                'from_user': query.from_user,
+                'message': query.message,
+                'id': query.id
+            })()
+            await cb_handler(client, refresh_query)
         
         elif data == "auto_settings":
             await show_auto_settings(client, query)
@@ -476,6 +529,7 @@ async def cb_handler(client, query: CallbackQuery):
             await query.answer("❌ Error occurred", show_alert=True)
         except:
             pass
+
 
 async def show_auto_settings(client, query):
     """Show auto settings page"""
@@ -564,16 +618,16 @@ async def initiate_input(client, query, data):
         user_setting_state[user_id] = setting
         
         messages = {
-            "prefix": "**Send me the prefix:**\n\nExample: `@YourChannel`\n\n/cancel to cancel",
-            "suffix": "**Send me the suffix:**\n\nExample: `@YourChannel`\n\n/cancel to cancel",
-            "remove_words": "**Send words to remove (comma separated):**\n\nExample: `hdcam, sample, x264, torrent`\n\n/cancel to cancel",
-            "replace_words": "**Send replacement pairs:**\n\nFormat: `old:new, old2:new2`\n\nExample: `tamil:kannada, english:hindi, 480p:720p`\n\n/cancel to cancel"
+            "prefix": "**➕ Send me the prefix:**\n\nExample: `@YourChannel`\n\nSend /cancel to cancel",
+            "suffix": "**➕ Send me the suffix:**\n\nExample: `@YourChannel`\n\nSend /cancel to cancel",
+            "remove_words": "**🗑️ Send words to remove (comma separated):**\n\nExample: `hdcam, sample, x264, torrent`\n\nSend /cancel to cancel",
+            "replace_words": "**🔄 Send replacement pairs:**\n\nFormat: `old:new, old2:new2`\n\nExample: `tamil:kannada, english:hindi, 480p:720p`\n\nSend /cancel to cancel"
         }
         
         await query.message.edit_text(
             messages[setting],
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("❌ Cancel", callback_data=f"clear_{setting}")
+                InlineKeyboardButton("❌ Clear & Back", callback_data=f"clear_{setting}")
             ]])
         )
     except Exception as e:
