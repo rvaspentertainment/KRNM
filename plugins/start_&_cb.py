@@ -9,7 +9,7 @@ from pyrogram.errors import (
 from helper.database import db
 from config import Config, Txt
 import asyncio
-
+from helper.settings_handler import user_setting_state
 # Dictionary to store user session generation states and settings input states
 user_states = {}
 
@@ -104,23 +104,17 @@ async def start(client, message):
 async def handle_text_input(client, message: Message):
     user_id = message.from_user.id
     
-    if user_id not in user_states:
+    # Check if user is in string session generation
+    if user_id in user_states and isinstance(user_states[user_id], SessionState):
+        state = user_states[user_id]
+        text = message.text.strip()
+        await handle_string_session_steps(client, message, state, text)
         return
     
-    state = user_states[user_id]
-    text = message.text.strip()
-    
-    try:
-        # Check if it's string session generation
-        if hasattr(state, 'step') and isinstance(state, SessionState):
-            await handle_string_session_steps(client, message, state, text)
-        # Check if it's settings input (prefix, suffix, etc.)
-        elif isinstance(state, str):
-            await handle_settings_input_data(client, message, state, text)
-    
-    except Exception as e:
-        print(f"Error in handle_text_input: {e}")
-        await message.reply_text(f"❌ Error: {str(e)}")
+    # Check if user is inputting settings (handled by settings_handler.py)
+    if user_id in user_setting_state:
+        return  # Let settings_handler.py handle this
+
 
 
 async def handle_string_session_steps(client, message, state, text):
