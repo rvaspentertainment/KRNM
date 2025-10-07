@@ -137,8 +137,8 @@ Cᴜʀʀᴇɴᴛ Mᴏᴅᴇ: <code>{mode}</code>
 • Aᴘᴘʟɪᴇꜱ ᴄᴜꜱᴛᴏᴍ ʀᴜʟᴇꜱ
 
 Cʜᴏᴏꜱᴇ ʏᴏᴜʀ ᴘʀᴇꜰᴇʀʀᴇᴅ ᴍᴏᴅᴇ:</b>"""
-
-AUTO_SETTINGS_TXT = """<b>
+    
+    AUTO_SETTINGS_TXT = """<b>
 ⚙️ <u>Aᴜᴛᴏ Rᴇɴᴀᴍᴇ Sᴇᴛᴛɪɴɢꜱ</u>
 
 🔹 Aᴜᴛᴏ Dᴇᴛᴇᴄᴛ Tyᴘᴇ: <code>{detect_type}</code>
