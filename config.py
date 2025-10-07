@@ -121,3 +121,34 @@ Join us :- @TG_UPDATES1 </b>"""
 @TG_UPDATES1
 
 𝚃𝙷𝙰𝙽𝙺 𝚈𝙾𝚄 𝙰𝙻𝙻 🫶</b>"""
+    
+    RENAME_MODE_TXT = """<b>
+🔧 <u>Rᴇɴᴀᴍᴇ Mᴏᴅᴇ Sᴇᴛᴛɪɴɢꜱ</u>
+
+Cᴜʀʀᴇɴᴛ Mᴏᴅᴇ: <code>{mode}</code>
+
+📌 <b>Mᴀɴᴜᴀʟ Mᴏᴅᴇ:</b>
+• Yᴏᴜ ᴡɪʟʟ ʙᴇ ᴀꜱᴋᴇᴅ ᴛᴏ ᴇɴᴛᴇʀ ᴀ ɴᴇᴡ ɴᴀᴍᴇ ꜰᴏʀ ᴇᴀᴄʜ ꜰɪʟᴇ
+
+🤖 <b>Aᴜᴛᴏ Mᴏᴅᴇ:</b>
+• Aᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟy ᴅᴇᴛᴇᴄᴛꜱ ᴀɴᴅ ᴄʟᴇᴀɴꜱ ꜰɪʟᴇɴᴀᴍᴇꜱ
+• Rᴇᴍᴏᴠᴇꜱ ᴜɴᴡᴀɴᴛᴇᴅ ᴡᴏʀᴅꜱ
+• Dᴇᴛᴇᴄᴛꜱ ʟᴀɴɢᴜᴀɢᴇ, Qᴜᴀʟɪᴛy, ᴍᴇᴅɪᴀ ᴛyᴩᴇ
+• Aᴘᴘʟɪᴇꜱ ᴄᴜꜱᴛᴏᴍ ʀᴜʟᴇꜱ
+
+Cʜᴏᴏꜱᴇ ʏᴏᴜʀ ᴘʀᴇꜰᴇʀʀᴇᴅ ᴍᴏᴅᴇ:</b>"""
+
+AUTO_SETTINGS_TXT = """<b>
+⚙️ <u>Aᴜᴛᴏ Rᴇɴᴀᴍᴇ Sᴇᴛᴛɪɴɢꜱ</u>
+
+🔹 Aᴜᴛᴏ Dᴇᴛᴇᴄᴛ Tyᴘᴇ: <code>{detect_type}</code>
+🔹 Aᴜᴛᴏ Dᴇᴛᴇᴄᴛ Lᴀɴɢᴜᴀɢᴇ: <code>{detect_lang}</code>
+🔹 Qᴜᴀʟɪᴛy Fᴏʀᴍᴀᴛ: <code>{quality}</code>
+🔹 Aᴜᴛᴏ Cʟᴇᴀɴ: <code>{auto_clean}</code>
+🔹 Pʀᴇꜰɪx: <code>{prefix}</code>
+🔹 Sᴜꜰꜰɪx: <code>{suffix}</code>
+🔹 Rᴇᴍᴏᴠᴇ Wᴏʀᴅꜱ: <code>{remove_words}</code>
+🔹 Rᴇᴘʟᴀᴄᴇ Wᴏʀᴅꜱ: <code>{replace_words}</code>
+
+Cᴏɴꜰɪɢᴜʀᴇ ʏᴏᴜʀ ᴀᴜᴛᴏ-ʀᴇɴᴀᴍᴇ ꜱᴇᴛᴛɪɴɢꜱ:</b>"""
+
