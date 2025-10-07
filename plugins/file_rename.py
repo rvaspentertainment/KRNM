@@ -386,7 +386,7 @@ async def handle_jai_bajarangabali(client, message, file, filename):
         try:
             await update.message.edit(f"❌ Eʀʀᴏʀ: {e}")
         except:
-            pass {e}")
+            pass 
         
         # Cleanup
         try:
