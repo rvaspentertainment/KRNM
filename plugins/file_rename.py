@@ -27,12 +27,15 @@ JAI_BAJARANGABALI_CONFIG = {
 
 def extract_episode_number(filename):
     """Extract episode number from filename"""
-    match = re.search(r'[Ee]pisode[.\s]*(\d+)', filename, re.IGNORECASE)
-    if match:
-        return match.group(1)
-    match = re.search(r'[Ee]p[.\s]*(\d+)', filename, re.IGNORECASE)
-    if match:
-        return match.group(1)
+    try:
+        match = re.search(r'[Ee]pisode[.\s]*(\d+)', filename, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        match = re.search(r'[Ee]p[.\s]*(\d+)', filename, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    except Exception as e:
+        print(f"Error extracting episode: {e}")
     return "Unknown"
 
 
@@ -87,19 +90,42 @@ def download_thumbnail(url, save_path):
 
 @Client.on_message(filters.private & (filters.document | filters.audio | filters.video))
 async def rename_start(client, message):
-    file = getattr(message, message.media.value)
-    filename = file.file_name
-    user_id = message.from_user.id
-    
-    # Use premium client for file size check if available
-    max_size = 4000 * 1024 * 1024 if premium_client else 2000 * 1024 * 1024
-    max_size_text = "4GB" if premium_client else "2GB"
-    
-    if file.file_size > max_size:
-         return await message.reply_text(f"Sᴏʀʀy Bʀᴏ Tʜɪꜱ Bᴏᴛ Dᴏᴇꜱɴ'ᴛ Sᴜᴩᴩᴏʀᴛ Uᴩʟᴏᴀᴅɪɴɢ Fɪʟᴇꜱ Bɪɢɢᴇʀ Tʜᴀɴ {max_size_text}")
+    try:
+        file = getattr(message, message.media.value)
+        filename = file.file_name
+        user_id = message.from_user.id
+        
+        # Use premium client for file size check if available
+        max_size = 4000 * 1024 * 1024 if premium_client else 2000 * 1024 * 1024
+        max_size_text = "4GB" if premium_client else "2GB"
+        
+        if file.file_size > max_size:
+            return await message.reply_text(f"Sᴏʀʀy Bʀᴏ Tʜɪꜱ Bᴏᴛ Dᴏᴇꜱɴ'ᴛ Sᴜᴩᴩᴏʀᴛ Uᴩʟᴏᴀᴅɪɴɢ Fɪʟᴇꜱ Bɪɢɢᴇʀ Tʜᴀɴ {max_size_text}")
 
-    # Check for Jai Bajarangabali special handling
-    if filename.lower().startswith("jai bajarangabali") or filename.lower().startswith("jai.bajarangabali"):
+        # Check for Jai Bajarangabali special handling
+        if filename.lower().startswith("jai bajarangabali") or filename.lower().startswith("jai.bajarangabali"):
+            await handle_jai_bajarangabali(client, message, file, filename)
+            return
+
+        # Check rename mode (manual or auto)
+        rename_mode = await db.get_rename_mode(user_id)
+        
+        if rename_mode == "auto":
+            await handle_auto_rename(client, message, file, filename, user_id)
+        else:
+            await handle_manual_rename(client, message, file, filename)
+    
+    except Exception as e:
+        print(f"Error in rename_start: {e}")
+        try:
+            await message.reply_text(f"❌ Eʀʀᴏʀ: {e}")
+        except:
+            pass
+
+
+async def handle_jai_bajarangabali(client, message, file, filename):
+    """Handle Jai Bajarangabali special upload"""
+    try:
         bracket_match = re.search(r'\[(\d+p)\]', filename)
         if bracket_match:
             new_quality = bracket_match.group(1)
@@ -131,17 +157,23 @@ async def rename_start(client, message):
         ms = await message.reply_text(status_text)
         
         try:
-            path = await upload_client.download_media(message=message, file_name=file_path, progress=progress_for_pyrogram, progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
+            path = await upload_client.download_media(
+                message=message, 
+                file_name=file_path, 
+                progress=progress_for_pyrogram, 
+                progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time())
+            )
         except Exception as e:
-            return await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+            await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+            return
         
         duration = 0
         try:
             metadata = extractMetadata(createParser(file_path))
-            if metadata.has("duration"):
+            if metadata and metadata.has("duration"):
                 duration = metadata.get('duration').seconds
-        except:
-            pass
+        except Exception as e:
+            print(f"Error extracting metadata: {e}")
         
         ph_path = None
         await ms.edit("🎨 Pʀᴇᴘᴀʀɪɴɢ Tʜᴜᴍʙɴᴀɪʟ...")
@@ -173,29 +205,39 @@ async def rename_start(client, message):
                 thumb=ph_path,
                 duration=duration,
                 progress=progress_for_pyrogram,
-                progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
+                progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time())
+            )
             
             await ms.edit("✅ Sᴜᴄᴄᴇssғᴜʟʟy Uᴩʟᴏᴀᴅᴇᴅ Tᴏ Cʜᴀɴɴᴇʟ!")
         except Exception as e:
             await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
         
+        # Cleanup
         try:
-            os.remove(file_path)
+            if os.path.exists(file_path):
+                os.remove(file_path)
             if os.path.exists(thumb_path):
                 os.remove(thumb_path)
             if os.path.exists(edited_thumb_path):
                 os.remove(edited_thumb_path)
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+    
+    except Exception as e:
+        print(f"Error in handle_jai_bajarangabali: {e}")
+        try:
+            await message.reply_text(f"❌ Eʀʀᴏʀ: {e}")
         except:
             pass
-        
-        return
 
-    # Check rename mode (manual or auto)
-    rename_mode = await db.get_rename_mode(user_id)
-    
-    if rename_mode == "auto":
-        # AUTO RENAME MODE
+
+async def handle_auto_rename(client, message, file, filename, user_id):
+    """Handle auto rename mode"""
+    try:
         settings = await db.get_all_rename_settings(user_id)
+        
+        # Check if always ask is enabled
+        always_ask = settings.get('always_ask', True)
         
         # Generate auto-renamed filename
         try:
@@ -206,50 +248,79 @@ async def rename_start(client, message):
                 file
             )
             
-            # Show preview and ask for confirmation
-            await message.reply_text(
-                text=f"**🤖 Aᴜᴛᴏ Rᴇɴᴀᴍᴇ Pʀᴇᴠɪᴇᴡ**\n\n**Oʟᴅ Nᴀᴍᴇ:**\n`{filename}`\n\n**Nᴇᴡ Nᴀᴍᴇ:**\n`{new_filename}`\n\n**Cʟɪᴄᴋ Cᴏɴꜰɪʀᴍ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ ᴏʀ Eᴅɪᴛ ᴛᴏ ᴍᴀɴᴜᴀʟʟy ᴄʜᴀɴɢᴇ**",
-                reply_to_message_id=message.id,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("✅ Cᴏɴꜰɪʀᴍ", callback_data=f"auto_confirm_{message.id}"),
-                    InlineKeyboardButton("✏️ Eᴅɪᴛ", callback_data=f"auto_edit_{message.id}")
-                ]])
-            )
+            if always_ask:
+                # Show preview and ask for confirmation
+                await message.reply_text(
+                    text=f"**🤖 Aᴜᴛᴏ Rᴇɴᴀᴍᴇ Pʀᴇᴠɪᴇᴡ**\n\n**Oʟᴅ Nᴀᴍᴇ:**\n`{filename}`\n\n**Nᴇᴡ Nᴀᴍᴇ:**\n`{new_filename}`\n\n**Cʟɪᴄᴋ Cᴏɴꜰɪʀᴍ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ ᴏʀ Eᴅɪᴛ ᴛᴏ ᴍᴀɴᴜᴀʟʟy ᴄʜᴀɴɢᴇ**",
+                    reply_to_message_id=message.id,
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("✅ Cᴏɴꜰɪʀᴍ", callback_data=f"auto_confirm_{message.id}"),
+                        InlineKeyboardButton("✏️ Eᴅɪᴛ", callback_data=f"auto_edit_{message.id}")
+                    ]])
+                )
+            else:
+                # Directly proceed with upload selection
+                await show_upload_options(client, message, new_filename, file)
+        
         except Exception as e:
+            print(f"Auto rename error: {e}")
             await message.reply_text(f"❌ Aᴜᴛᴏ Rᴇɴᴀᴍᴇ Eʀʀᴏʀ: {e}\n\nFᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ᴍᴀɴᴜᴀʟ ᴍᴏᴅᴇ...")
-            rename_mode = "manual"
+            await handle_manual_rename(client, message, file, filename)
     
-    if rename_mode == "manual":
-        # MANUAL RENAME MODE (existing behavior)
+    except Exception as e:
+        print(f"Error in handle_auto_rename: {e}")
+        await message.reply_text(f"❌ Eʀʀᴏʀ: {e}")
+
+
+async def handle_manual_rename(client, message, file, filename):
+    """Handle manual rename mode"""
+    try:
+        await message.reply_text(
+            text=f"**__Pʟᴇᴀꜱᴇ Eɴᴛᴇʀ Nᴇᴡ Fɪʟᴇɴᴀᴍᴇ...__**\n\n**Oʟᴅ Fɪʟᴇ Nᴀᴍᴇ** :- `{filename}`",
+            reply_to_message_id=message.id,  
+            reply_markup=ForceReply(True)
+        )       
+        await sleep(30)
+    except FloodWait as e:
+        await sleep(e.value)
         try:
             await message.reply_text(
                 text=f"**__Pʟᴇᴀꜱᴇ Eɴᴛᴇʀ Nᴇᴡ Fɪʟᴇɴᴀᴍᴇ...__**\n\n**Oʟᴅ Fɪʟᴇ Nᴀᴍᴇ** :- `{filename}`",
                 reply_to_message_id=message.id,  
                 reply_markup=ForceReply(True)
-            )       
-            await sleep(30)
-        except FloodWait as e:
-            await sleep(e.value)
-            await message.reply_text(
-                text=f"**__Pʟᴇᴀꜱᴇ Eɴᴛᴇʀ Nᴇᴡ Fɪʟᴇɴᴀᴍᴇ...__**\n\n**Oʟᴅ Fɪʟᴇ Nᴀᴍᴇ** :- `{filename}`",
-                reply_to_message_id=message.id,  
-                reply_markup=ForceReply(True)
             )
-        except:
-            pass
+        except Exception as e:
+            print(f"Error in FloodWait retry: {e}")
+    except Exception as e:
+        print(f"Error in handle_manual_rename: {e}")
 
 
-# Store auto-renamed filenames temporarily
-auto_rename_cache = {}
+async def show_upload_options(client, message, new_filename, file):
+    """Show upload type selection"""
+    try:
+        button = [[InlineKeyboardButton("📁 Dᴏᴄᴜᴍᴇɴᴛ", callback_data="upload_document")]]
+        
+        if message.media in [MessageMediaType.VIDEO, MessageMediaType.DOCUMENT]:
+            button.append([InlineKeyboardButton("🎥 Vɪᴅᴇᴏ", callback_data="upload_video")])
+        elif message.media == MessageMediaType.AUDIO:
+            button.append([InlineKeyboardButton("🎵 Aᴜᴅɪᴏ", callback_data="upload_audio")])
+        
+        await message.reply(
+            text=f"**Sᴇʟᴇᴄᴛ Tʜᴇ Oᴜᴛᴩᴜᴛ Fɪʟᴇ Tyᴩᴇ**\n**• Fɪʟᴇ Nᴀᴍᴇ :-** `{new_filename}`",
+            reply_to_message_id=message.id,
+            reply_markup=InlineKeyboardMarkup(button)
+        )
+    except Exception as e:
+        print(f"Error in show_upload_options: {e}")
 
 
 @Client.on_callback_query(filters.regex(r"^auto_confirm_"))
 async def auto_confirm_handler(client, query):
-    message_id = int(query.data.split("_")[2])
-    user_id = query.from_user.id
-    
-    # Get the original message
     try:
+        message_id = int(query.data.split("_")[2])
+        user_id = query.from_user.id
+        
+        # Get the original message
         original_msg = await client.get_messages(query.message.chat.id, message_id)
         file = getattr(original_msg, original_msg.media.value)
         
@@ -263,28 +334,21 @@ async def auto_confirm_handler(client, query):
         )
         
         await query.message.delete()
-        
-        # Proceed with upload selection
-        button = [[InlineKeyboardButton("📁 Dᴏᴄᴜᴍᴇɴᴛ", callback_data="upload_document")]]
-        if original_msg.media in [MessageMediaType.VIDEO, MessageMediaType.DOCUMENT]:
-            button.append([InlineKeyboardButton("🎥 Vɪᴅᴇᴏ", callback_data="upload_video")])
-        elif original_msg.media == MessageMediaType.AUDIO:
-            button.append([InlineKeyboardButton("🎵 Aᴜᴅɪᴏ", callback_data="upload_audio")])
-        
-        await query.message.reply(
-            text=f"**Sᴇʟᴇᴄᴛ Tʜᴇ Oᴜᴛᴩᴜᴛ Fɪʟᴇ Tyᴩᴇ**\n**• Fɪʟᴇ Nᴀᴍᴇ :-** `{new_filename}`",
-            reply_to_message_id=original_msg.id,
-            reply_markup=InlineKeyboardMarkup(button)
-        )
+        await show_upload_options(client, original_msg, new_filename, file)
+    
     except Exception as e:
-        await query.answer(f"❌ Eʀʀᴏʀ: {e}", show_alert=True)
+        print(f"Error in auto_confirm_handler: {e}")
+        try:
+            await query.answer(f"❌ Eʀʀᴏʀ: {e}", show_alert=True)
+        except:
+            pass
 
 
 @Client.on_callback_query(filters.regex(r"^auto_edit_"))
 async def auto_edit_handler(client, query):
-    message_id = int(query.data.split("_")[2])
-    
     try:
+        message_id = int(query.data.split("_")[2])
+        
         original_msg = await client.get_messages(query.message.chat.id, message_id)
         file = getattr(original_msg, original_msg.media.value)
         
@@ -295,123 +359,167 @@ async def auto_edit_handler(client, query):
             reply_markup=ForceReply(True)
         )
     except Exception as e:
-        await query.answer(f"❌ Eʀʀᴏʀ: {e}", show_alert=True)
+        print(f"Error in auto_edit_handler: {e}")
+        try:
+            await query.answer(f"❌ Eʀʀᴏʀ: {e}", show_alert=True)
+        except:
+            pass
 
 
 @Client.on_message(filters.private & filters.reply)
 async def refunc(client, message):
-    reply_message = message.reply_to_message
-    if (reply_message.reply_markup) and isinstance(reply_message.reply_markup, ForceReply):
-        new_name = message.text 
-        await message.delete() 
-        msg = await client.get_messages(message.chat.id, reply_message.id)
-        file = msg.reply_to_message
-        media = getattr(file, file.media.value)
-        if not "." in new_name:
-            if "." in media.file_name:
-                extn = media.file_name.rsplit('.', 1)[-1]
-            else:
-                extn = "mkv"
-            new_name = new_name + "." + extn
-        await reply_message.delete()
-
-        button = [[InlineKeyboardButton("📁 Dᴏᴄᴜᴍᴇɴᴛ",callback_data = "upload_document")]]
-        if file.media in [MessageMediaType.VIDEO, MessageMediaType.DOCUMENT]:
-            button.append([InlineKeyboardButton("🎥 Vɪᴅᴇᴏ", callback_data = "upload_video")])
-        elif file.media == MessageMediaType.AUDIO:
-            button.append([InlineKeyboardButton("🎵 Aᴜᴅɪᴏ", callback_data = "upload_audio")])
-        await message.reply(
-            text=f"**Sᴇʟᴇᴄᴛ Tʜᴇ Oᴜᴛᴩᴜᴛ Fɪʟᴇ Tyᴩᴇ**\n**• Fɪʟᴇ Nᴀᴍᴇ :-**`{new_name}`",
-            reply_to_message_id=file.id,
-            reply_markup=InlineKeyboardMarkup(button)
-        )
+    try:
+        reply_message = message.reply_to_message
+        if (reply_message.reply_markup) and isinstance(reply_message.reply_markup, ForceReply):
+            new_name = message.text 
+            await message.delete() 
+            msg = await client.get_messages(message.chat.id, reply_message.id)
+            file = msg.reply_to_message
+            media = getattr(file, file.media.value)
+            
+            if not "." in new_name:
+                if "." in media.file_name:
+                    extn = media.file_name.rsplit('.', 1)[-1]
+                else:
+                    extn = "mkv"
+                new_name = new_name + "." + extn
+            
+            await reply_message.delete()
+            await show_upload_options(client, file, new_name, media)
+    
+    except Exception as e:
+        print(f"Error in refunc: {e}")
 
 
 @Client.on_callback_query(filters.regex("upload"))
 async def doc(bot, update):
-    upload_client = premium_client if premium_client else bot
-    
-    new_name = update.message.text
-    new_filename = new_name.split(":-")[1].strip()
-    file_path = f"downloads/{new_filename}"
-    file = update.message.reply_to_message
-
-    status_msg = "Tʀyɪɴɢ Tᴏ Dᴏᴡɴʟᴏᴀᴅɪɴɢ...."
-    if premium_client:
-        status_msg += "\n✅ Premium Mode (4GB)"
-    ms = await update.message.edit(status_msg)
-    
     try:
-        path = await upload_client.download_media(message=file, file_name=file_path, progress=progress_for_pyrogram,progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))                    
-    except Exception as e:
-        return await ms.edit(e)
+        upload_client = premium_client if premium_client else bot
+        
+        new_name = update.message.text
+        new_filename = new_name.split(":-")[1].strip().replace("`", "")
+        file_path = f"downloads/{new_filename}"
+        file = update.message.reply_to_message
+        user_id = update.message.chat.id
+
+        status_msg = "Tʀyɪɴɢ Tᴏ Dᴏᴡɴʟᴏᴀᴅɪɴɢ...."
+        if premium_client:
+            status_msg += "\n✅ Premium Mode (4GB)"
+        ms = await update.message.edit(status_msg)
+        
+        try:
+            path = await upload_client.download_media(
+                message=file, 
+                file_name=file_path, 
+                progress=progress_for_pyrogram,
+                progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time())
+            )                    
+        except Exception as e:
+            print(f"Download error: {e}")
+            await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+            return
+                
+        duration = 0
+        try:
+            metadata = extractMetadata(createParser(file_path))
+            if metadata and metadata.has("duration"):
+                duration = metadata.get('duration').seconds
+        except Exception as e:
+            print(f"Metadata error: {e}")
+        
+        ph_path = None
+        media = getattr(file, file.media.value)
+        c_caption = await db.get_caption(user_id)
+        c_thumb = await db.get_thumbnail(user_id)
+
+        if c_caption:
+            try:
+                caption = c_caption.format(
+                    filename=new_filename, 
+                    filesize=humanbytes(media.file_size), 
+                    duration=convert(duration)
+                )
+            except Exception as e:
+                print(f"Caption error: {e}")
+                await ms.edit(text=f"Yᴏᴜʀ Cᴀᴩᴛɪᴏɴ Eʀʀᴏʀ Exᴄᴇᴩᴛ Kᴇyᴡᴏʀᴅ Aʀɢᴜᴍᴇɴᴛ ●> ({e})")
+                return
+        else:
+            caption = f"**{new_filename}**"
+    
+        if (media.thumbs or c_thumb):
+            try:
+                if c_thumb:
+                    ph_path = await upload_client.download_media(c_thumb) 
+                else:
+                    ph_path = await upload_client.download_media(media.thumbs[0].file_id)
+                
+                Image.open(ph_path).convert("RGB").save(ph_path)
+                img = Image.open(ph_path)
+                img.resize((320, 320))
+                img.save(ph_path, "JPEG")
+            except Exception as e:
+                print(f"Thumbnail error: {e}")
+                ph_path = None
+
+        await ms.edit("Tʀyɪɴɢ Tᴏ Uᴩʟᴏᴀᴅɪɴɢ....")
+        
+        # Check if user has set upload channel
+        upload_channel = await db.get_upload_channel(user_id)
+        destination = upload_channel if upload_channel else user_id
+        
+        type = update.data.split("_")[1]
+        try:
+            if type == "document":
+                await upload_client.send_document(
+                    destination,
+                    document=file_path,
+                    thumb=ph_path, 
+                    caption=caption, 
+                    progress=progress_for_pyrogram,
+                    progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time())
+                )
+            elif type == "video": 
+                await upload_client.send_video(
+                    destination,
+                    video=file_path,
+                    caption=caption,
+                    thumb=ph_path,
+                    duration=duration,
+                    progress=progress_for_pyrogram,
+                    progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time())
+                )
+            elif type == "audio": 
+                await upload_client.send_audio(
+                    destination,
+                    audio=file_path,
+                    caption=caption,
+                    thumb=ph_path,
+                    duration=duration,
+                    progress=progress_for_pyrogram,
+                    progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time())
+                )
             
-    duration = 0
-    try:
-        metadata = extractMetadata(createParser(file_path))
-        if metadata.has("duration"):
-           duration = metadata.get('duration').seconds
-    except:
-        pass
-    ph_path = None
-    user_id = int(update.message.chat.id) 
-    media = getattr(file, file.media.value)
-    c_caption = await db.get_caption(update.message.chat.id)
-    c_thumb = await db.get_thumbnail(update.message.chat.id)
-
-    if c_caption:
-         try:
-             caption = c_caption.format(filename=new_filename, filesize=humanbytes(media.file_size), duration=convert(duration))
-         except Exception as e:
-             return await ms.edit(text=f"Yᴏᴜʀ Cᴀᴩᴛɪᴏɴ Eʀʀᴏʀ Exᴄᴇᴩᴛ Kᴇyᴡᴏʀᴅ Aʀɢᴜᴍᴇɴᴛ ●> ({e})")             
-    else:
-         caption = f"**{new_filename}**"
- 
-    if (media.thumbs or c_thumb):
-         if c_thumb:
-             ph_path = await upload_client.download_media(c_thumb) 
-         else:
-             ph_path = await upload_client.download_media(media.thumbs[0].file_id)
-         Image.open(ph_path).convert("RGB").save(ph_path)
-         img = Image.open(ph_path)
-         img.resize((320, 320))
-         img.save(ph_path, "JPEG")
-
-    await ms.edit("Tʀyɪɴɢ Tᴏ Uᴩʟᴏᴀᴅɪɴɢ....")
-    type = update.data.split("_")[1]
-    try:
-        if type == "document":
-            await upload_client.send_document(
-                update.message.chat.id,
-                document=file_path,
-                thumb=ph_path, 
-                caption=caption, 
-                progress=progress_for_pyrogram,
-                progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
-        elif type == "video": 
-            await upload_client.send_video(
-                update.message.chat.id,
-                video=file_path,
-                caption=caption,
-                thumb=ph_path,
-                duration=duration,
-                progress=progress_for_pyrogram,
-                progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
-        elif type == "audio": 
-            await upload_client.send_audio(
-                update.message.chat.id,
-                audio=file_path,
-                caption=caption,
-                thumb=ph_path,
-                duration=duration,
-                progress=progress_for_pyrogram,
-                progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
-    except Exception as e:          
-        os.remove(file_path)
-        if ph_path:
-            os.remove(ph_path)
-        return await ms.edit(f" Eʀʀᴏʀ {e}")
- 
-    await ms.delete() 
-    os.remove(file_path) 
-    if ph_path: os.remove(ph_path)
+            if upload_channel:
+                await ms.edit("✅ Sᴜᴄᴄᴇssғᴜʟʟy Uᴩʟᴏᴀᴅᴇᴅ Tᴏ Cʜᴀɴɴᴇʟ!")
+            else:
+                await ms.delete()
+        
+        except Exception as e:
+            print(f"Upload error: {e}")
+            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+        finally:
+            # Cleanup
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                if ph_path and os.path.exists(ph_path):
+                    os.remove(ph_path)
+            except Exception as e:
+                print(f"Cleanup error: {e}")
+    
+    except Exception as e:
+        print(f"Error in doc handler: {e}")
+        try:
+            await update.message.edit(f"❌ Eʀʀᴏʀ: {e}")
+        except:
+            pass
