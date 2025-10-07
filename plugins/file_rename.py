@@ -8,6 +8,7 @@ from hachoir.parser import createParser
 
 from helper.utils import progress_for_pyrogram, convert, humanbytes
 from helper.database import db
+from bot import bot, premium_client  # Import both clients
 
 from asyncio import sleep
 from PIL import Image, ImageDraw, ImageFont
@@ -17,8 +18,8 @@ from io import BytesIO
 
 # Configuration for Jai Bajarangabali auto-upload
 JAI_BAJARANGABALI_CONFIG = {
-    "channel_id": -1002987317144,  # Replace with your channel ID (with -100 prefix)
-    "thumbnail_url": "https://envs.sh/zcf.jpg",  # Replace with your image URL
+    "channel_id": -1002987317144,
+    "thumbnail_url": "https://envs.sh/zcf.jpg",
     "caption_template": "**Jai Bajarangabali Episode {episode}**\n\n📺 Quality: {quality}\n💾 Size: {filesize}\n⏱ Duration: {duration}"
 }
 
@@ -95,9 +96,14 @@ def download_thumbnail(url, save_path):
 @Client.on_message(filters.private & (filters.document | filters.audio | filters.video))
 async def rename_start(client, message):
     file = getattr(message, message.media.value)
-    filename = file.file_name  
-    if file.file_size > 2000 * 1024 * 1024:
-         return await message.reply_text("Sᴏʀʀy Bʀᴏ Tʜɪꜱ Bᴏᴛ Iꜱ Dᴏᴇꜱɴ'ᴛ Sᴜᴩᴩᴏʀᴛ Uᴩʟᴏᴀᴅɪɴɢ Fɪʟᴇꜱ Bɪɢɢᴇʀ Tʜᴀɴ 2Gʙ")
+    filename = file.file_name
+    
+    # Use premium client for file size check if available
+    max_size = 4000 * 1024 * 1024 if premium_client else 2000 * 1024 * 1024  # 4GB or 2GB
+    max_size_text = "4GB" if premium_client else "2GB"
+    
+    if file.file_size > max_size:
+         return await message.reply_text(f"Sᴏʀʀy Bʀᴏ Tʜɪꜱ Bᴏᴛ Dᴏᴇꜱɴ'ᴛ Sᴜᴩᴩᴏʀᴛ Uᴩʟᴏᴀᴅɪɴɢ Fɪʟᴇꜱ Bɪɢɢᴇʀ Tʜᴀɴ {max_size_text}")
 
     # Check if filename starts with "Jai Bajarangabali" or "Jai.Bajarangabali"
     if filename.lower().startswith("jai bajarangabali") or filename.lower().startswith("jai.bajarangabali"):
@@ -127,15 +133,21 @@ async def rename_start(client, message):
         # Extract episode number
         episode_number = extract_episode_number(filename)
         
+        # Use premium client if available, otherwise use regular bot
+        upload_client = premium_client if premium_client else client
+        
         # Directly upload to channel without asking
         file_path = f"downloads/{new_name}"
         thumb_path = f"downloads/thumb_{episode_number}.jpg"
         edited_thumb_path = f"downloads/thumb_edited_{episode_number}.jpg"
         
-        ms = await message.reply_text("🔄 Aᴜᴛᴏ-Pʀᴏᴄᴇssɪɴɢ Jᴀɪ Bᴀᴊᴀʀᴀɴɢᴀʙᴀʟɪ...\n📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ...")
+        status_text = "🔄 Aᴜᴛᴏ-Pʀᴏᴄᴇssɪɴɢ Jᴀɪ Bᴀᴊᴀʀᴀɴɢᴀʙᴀʟɪ...\n📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ..."
+        if premium_client:
+            status_text += "\n✅ Using Premium (4GB Support)"
+        ms = await message.reply_text(status_text)
         
         try:
-            path = await client.download_media(message=message, file_name=file_path, progress=progress_for_pyrogram, progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
+            path = await upload_client.download_media(message=message, file_name=file_path, progress=progress_for_pyrogram, progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
         except Exception as e:
             return await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
         
@@ -173,7 +185,7 @@ async def rename_start(client, message):
         await ms.edit("📤 Uᴩʟᴏᴀᴅɪɴɢ Tᴏ Cʜᴀɴɴᴇʟ...")
         
         try:
-            await client.send_video(
+            await upload_client.send_video(
                 JAI_BAJARANGABALI_CONFIG["channel_id"],
                 video=file_path,
                 caption=caption,
@@ -249,15 +261,22 @@ async def refunc(client, message):
 
 
 @Client.on_callback_query(filters.regex("upload"))
-async def doc(bot, update):    
+async def doc(bot, update):
+    # Use premium client if available for uploads
+    upload_client = premium_client if premium_client else bot
+    
     new_name = update.message.text
     new_filename = new_name.split(":-")[1]
     file_path = f"downloads/{new_filename}"
     file = update.message.reply_to_message
 
-    ms = await update.message.edit("Tʀyɪɴɢ Tᴏ Dᴏᴡɴʟᴏᴀᴅɪɴɢ....")    
+    status_msg = "Tʀyɪɴɢ Tᴏ Dᴏᴡɴʟᴏᴀᴅɪɴɢ...."
+    if premium_client:
+        status_msg += "\n✅ Premium Mode (4GB)"
+    ms = await update.message.edit(status_msg)
+    
     try:
-     	path = await bot.download_media(message=file, file_name=file_path, progress=progress_for_pyrogram,progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))                    
+     	path = await upload_client.download_media(message=file, file_name=file_path, progress=progress_for_pyrogram,progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))                    
     except Exception as e:
      	return await ms.edit(e)
      	     
@@ -284,9 +303,9 @@ async def doc(bot, update):
  
     if (media.thumbs or c_thumb):
          if c_thumb:
-             ph_path = await bot.download_media(c_thumb) 
+             ph_path = await upload_client.download_media(c_thumb) 
          else:
-             ph_path = await bot.download_media(media.thumbs[0].file_id)
+             ph_path = await upload_client.download_media(media.thumbs[0].file_id)
          Image.open(ph_path).convert("RGB").save(ph_path)
          img = Image.open(ph_path)
          img.resize((320, 320))
@@ -296,7 +315,7 @@ async def doc(bot, update):
     type = update.data.split("_")[1]
     try:
         if type == "document":
-            await bot.send_document(
+            await upload_client.send_document(
                 update.message.chat.id,
                 document=file_path,
                 thumb=ph_path, 
@@ -304,7 +323,7 @@ async def doc(bot, update):
                 progress=progress_for_pyrogram,
                 progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
         elif type == "video": 
-            await bot.send_video(
+            await upload_client.send_video(
 		update.message.chat.id,
 	        video=file_path,
 	        caption=caption,
@@ -313,7 +332,7 @@ async def doc(bot, update):
 	        progress=progress_for_pyrogram,
 		progress_args=("Uᴩʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time()))
         elif type == "audio": 
-            await bot.send_audio(
+            await upload_client.send_audio(
 		update.message.chat.id,
 		audio=file_path,
 		caption=caption,
