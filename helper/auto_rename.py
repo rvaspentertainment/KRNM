@@ -203,55 +203,43 @@ def detect_media_type(file, media_type):
 
 
 def extract_movie_name(filename):
-    """Extract main movie/show name from filename"""
+    """Extract main movie/show name from filename - CLEAN VERSION"""
     try:
         # Remove extension
         name = filename.rsplit('.', 1)[0]
         
-        # Remove year if present (will be added back if needed)
-        name = re.sub(r'\(?\d{4}\)?', '', name)
-        
-        # Remove quality
-        for quality, patterns in QUALITY_PATTERNS.items():
-            for pattern in patterns:
-                name = re.sub(pattern, '', name, flags=re.IGNORECASE)
-        
-        # Remove encoding
-        for encoding, patterns in ENCODING_PATTERNS.items():
-            for pattern in patterns:
-                name = re.sub(rf'\b{pattern}\b', '', name, flags=re.IGNORECASE)
-        
-        # Remove source
-        for source, patterns in SOURCE_PATTERNS.items():
-            for pattern in patterns:
-                name = re.sub(rf'\b{pattern}\b', '', name, flags=re.IGNORECASE)
-        
-        # Remove OTT
-        for platform, patterns in OTT_PLATFORMS.items():
-            for pattern in patterns:
-                name = re.sub(rf'\b{pattern}\b', '', name, flags=re.IGNORECASE)
-        
-        # Remove languages
-        for lang, keywords in LANGUAGE_KEYWORDS.items():
-            for keyword in keywords:
-                name = re.sub(rf'\b{keyword}\b', '', name, flags=re.IGNORECASE)
-        
-        # Remove audio
-        for audio, patterns in AUDIO_PATTERNS.items():
-            for pattern in patterns:
-                name = re.sub(rf'\b{pattern}\b', '', name, flags=re.IGNORECASE)
-        
-        # Remove common junk words
-        for junk in COMMON_JUNK_WORDS:
-            name = re.sub(rf'\b{junk}\b', '', name, flags=re.IGNORECASE)
-        
-        # Remove brackets and their contents
+        # Remove everything in brackets first
         name = re.sub(r'\[.*?\]', '', name)
         name = re.sub(r'\(.*?\)', '', name)
         name = re.sub(r'\{.*?\}', '', name)
         
+        # Remove year
+        name = re.sub(r'\b(19\d{2}|20\d{2})\b', '', name)
+        
+        # Remove quality patterns
+        name = re.sub(r'\b(2160p|1080p|720p|480p|360p|240p|4k|uhd|fhd|hd|sd)\b', '', name, flags=re.IGNORECASE)
+        
+        # Remove encoding
+        name = re.sub(r'\b(h264|h265|x264|x265|hevc|avc|10bit|8bit)\b', '', name, flags=re.IGNORECASE)
+        
+        # Remove source
+        name = re.sub(r'\b(web-?dl|webrip|hdrip|dvdrip|bluray|blu-?ray|brrip|bdrip|hdtv|tvrip|hdcam|camrip|cam)\b', '', name, flags=re.IGNORECASE)
+        
+        # Remove OTT platforms
+        name = re.sub(r'\b(netflix|nf|ntflx|amazon|amzn|prime|disney|hotstar|hbo|apple|hulu|zee5|sonyliv|voot|mx)\b', '', name, flags=re.IGNORECASE)
+        
+        # Remove audio
+        name = re.sub(r'\b(aac|ac3|dd|dts|atmos|truehd)\b', '', name, flags=re.IGNORECASE)
+        
+        # Remove common junk
+        for junk in COMMON_JUNK_WORDS:
+            name = re.sub(rf'\b{junk}\b', '', name, flags=re.IGNORECASE)
+        
+        # Remove special characters
+        name = re.sub(r'[#@\[\]\{\}_]', '', name)
+        
         # Clean up separators
-        name = re.sub(r'[._-]+', ' ', name)
+        name = re.sub(r'[.-]+', ' ', name)
         name = re.sub(r'\s+', ' ', name)
         
         return name.strip()
@@ -259,9 +247,8 @@ def extract_movie_name(filename):
         print(f"Error extracting movie name: {e}")
         return filename.rsplit('.', 1)[0]
 
-
 def clean_filename(filename, remove_words=None, replace_words=None, auto_clean=True):
-    """Clean filename by removing/replacing words"""
+    """Clean filename by removing/replacing words and unwanted characters"""
     try:
         name = filename
         
@@ -274,15 +261,22 @@ def clean_filename(filename, remove_words=None, replace_words=None, auto_clean=T
         if remove_words:
             for word in remove_words:
                 if word:
-                    name = re.sub(rf'\b{word}\b', '', name, flags=re.IGNORECASE)
+                    name = re.sub(rf'\b{re.escape(word)}\b', '', name, flags=re.IGNORECASE)
         
         # Replace custom words
         if replace_words:
             for old_word, new_word in replace_words.items():
                 if old_word and new_word:
-                    name = re.sub(rf'\b{old_word}\b', new_word, name, flags=re.IGNORECASE)
+                    name = re.sub(rf'\b{re.escape(old_word)}\b', new_word, name, flags=re.IGNORECASE)
         
-        # Clean up
+        # Remove unwanted special characters
+        name = re.sub(r'[#@\[\]\{\}]', '', name)
+        
+        # Remove brackets and their contents
+        name = re.sub(r'\[.*?\]', '', name)
+        name = re.sub(r'\(.*?\)', '', name)
+        
+        # Clean up separators
         name = re.sub(r'[._-]+', ' ', name)
         name = re.sub(r'\s+', ' ', name)
         
@@ -290,7 +284,6 @@ def clean_filename(filename, remove_words=None, replace_words=None, auto_clean=T
     except Exception as e:
         print(f"Error cleaning filename: {e}")
         return filename
-
 
 async def auto_rename_file(filename, settings, media_type, file):
     """Main function to auto-rename file based on settings"""
