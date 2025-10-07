@@ -235,42 +235,76 @@ async def handle_auto_rename(client, message, file, filename, user_id):
     """Handle auto rename mode"""
     try:
         settings = await db.get_all_rename_settings(user_id)
-        
-        # Check if always ask is enabled
         always_ask = settings.get('always_ask', True)
         
-        # Generate auto-renamed filename
-        try:
-            new_filename = await auto_rename_file(
-                filename, 
-                settings, 
-                message.media, 
-                file
-            )
-            
-            if always_ask:
-                # Show preview and ask for confirmation
-                await message.reply_text(
-                    text=f"**🤖 Aᴜᴛᴏ Rᴇɴᴀᴍᴇ Pʀᴇᴠɪᴇᴡ**\n\n**Oʟᴅ Nᴀᴍᴇ:**\n`{filename}`\n\n**Nᴇᴡ Nᴀᴍᴇ:**\n`{new_filename}`\n\n**Cʟɪᴄᴋ Cᴏɴꜰɪʀᴍ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ ᴏʀ Eᴅɪᴛ ᴛᴏ ᴍᴀɴᴜᴀʟʟy ᴄʜᴀɴɢᴇ**",
-                    reply_to_message_id=message.id,
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("✅ Cᴏɴꜰɪʀᴍ", callback_data=f"auto_confirm_{message.id}"),
-                        InlineKeyboardButton("✏️ Eᴅɪᴛ", callback_data=f"auto_edit_{message.id}")
-                    ]])
-                )
-            else:
-                # Directly proceed with upload selection
-                await show_upload_options(client, message, new_filename, file)
+        # Check if auto detection is enabled
+        auto_detect_enabled = settings.get('auto_detect_language', False) or settings.get('auto_detect_year', False)
         
-        except Exception as e:
-            print(f"Auto rename error: {e}")
-            await message.reply_text(f"❌ Aᴜᴛᴏ Rᴇɴᴀᴍᴇ Eʀʀᴏʀ: {e}\n\nFᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ᴍᴀɴᴜᴀʟ ᴍᴏᴅᴇ...")
-            await handle_manual_rename(client, message, file, filename)
+        if auto_detect_enabled:
+            # Auto detect mode - with confirmation if always_ask is ON
+            try:
+                new_filename = await auto_rename_file(
+                    filename, 
+                    settings, 
+                    message.media, 
+                    file
+                )
+                
+                if always_ask:
+                    # Show preview and ask for confirmation
+                    await message.reply_text(
+                        text=f"**🤖 Auto Rename Preview**\n\n**Old Name:**\n`{filename}`\n\n**New Name:**\n`{new_filename}`\n\n**Click Confirm to proceed or Edit to change**",
+                        reply_to_message_id=message.id,
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("✅ Confirm", callback_data=f"auto_confirm_{message.id}"),
+                            InlineKeyboardButton("✏️ Edit", callback_data=f"auto_edit_{message.id}")
+                        ]])
+                    )
+                else:
+                    # Direct proceed without asking
+                    await show_upload_options(client, message, new_filename, file)
+            
+            except Exception as e:
+                print(f"Auto rename error: {e}")
+                await message.reply_text(f"❌ Auto Rename Error: {e}\n\nFalling back to manual mode...")
+                await handle_manual_rename(client, message, file, filename)
+        else:
+            # Simple clean mode - just remove/replace words, no confirmation
+            try:
+                new_filename = clean_filename(
+                    filename,
+                    remove_words=settings.get('remove_words', []),
+                    replace_words=settings.get('replace_words', {}),
+                    auto_clean=settings.get('auto_clean', True)
+                )
+                
+                # Apply prefix/suffix
+                if '.' in new_filename:
+                    name, ext = new_filename.rsplit('.', 1)
+                else:
+                    name = new_filename
+                    ext = 'mkv'
+                
+                prefix = settings.get('prefix', '')
+                suffix = settings.get('suffix', '')
+                
+                if prefix:
+                    name = f"{prefix} {name}"
+                if suffix:
+                    name = f"{name} {suffix}"
+                
+                new_filename = f"{name}.{ext}"
+                
+                # Direct proceed without asking
+                await show_upload_options(client, message, new_filename, file)
+            
+            except Exception as e:
+                print(f"Clean error: {e}")
+                await message.reply_text(f"❌ Error: {e}")
     
     except Exception as e:
         print(f"Error in handle_auto_rename: {e}")
-        await message.reply_text(f"❌ Eʀʀᴏʀ: {e}")
-
+        await message.reply_text(f"❌ Error: {e}")
 
 async def handle_manual_rename(client, message, file, filename):
     """Handle manual rename mode"""
