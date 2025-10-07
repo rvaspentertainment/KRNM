@@ -363,7 +363,21 @@ async def cb_handler(client, query: CallbackQuery):
                     InlineKeyboardButton("◀️ Back", callback_data="settings")
                 ]])
             )
-
+            
+        elif data.startswith("upload_type_"):
+            upload_type = data.replace("upload_type_", "")
+            await db.set_upload_as(user_id, upload_type)
+            await query.answer(f"✅ Upload as {upload_type.upper()}", show_alert=True)   
+            # Recreate the callback to refresh
+            from pyrogram.types import CallbackQuery as CQ
+            new_query = CQ(
+                client=client,
+                id=query.id,
+                from_user=query.from_user,
+                message=query.message,
+                data="upload_settings"
+            )
+            await cb_handler(client, new_query)
         
         elif data in ["set_upload_document", "set_upload_video", "set_upload_audio"]:
             upload_type = data.split("_")[2]
