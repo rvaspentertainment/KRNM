@@ -559,6 +559,9 @@ async def refunc(client, message):
 
 @Client.on_callback_query(filters.regex("upload"))
 async def doc(bot, update):
+    file_path = None
+    ph_path = None
+    
     try:
         upload_client = premium_client if premium_client else bot
         
@@ -593,7 +596,6 @@ async def doc(bot, update):
         except Exception as e:
             print(f"Metadata error: {e}")
         
-        ph_path = None
         media = getattr(file, file.media.value)
         c_caption = await db.get_caption(user_id)
         c_thumb = await db.get_thumbnail(user_id)
@@ -678,3 +680,29 @@ async def doc(bot, update):
         except Exception as e:
             print(f"Upload error: {e}")
             await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+        
+        finally:
+            # Cleanup after upload
+            try:
+                if file_path and os.path.exists(file_path):
+                    os.remove(file_path)
+                if ph_path and os.path.exists(ph_path):
+                    os.remove(ph_path)
+            except Exception as e:
+                print(f"Cleanup error: {e}")
+    
+    except Exception as e:
+        print(f"Error in doc callback: {e}")
+        try:
+            await update.message.edit(f"❌ Eʀʀᴏʀ: {e}")
+        except:
+            pass
+        
+        # Final cleanup in case of outer exception
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+            if ph_path and os.path.exists(ph_path):
+                os.remove(ph_path)
+        except Exception as e:
+            print(f"Final cleanup error: {e}")
