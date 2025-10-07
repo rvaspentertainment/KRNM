@@ -9,7 +9,7 @@ from pyrogram.errors import (
 from helper.database import db
 from config import Config, Txt
 import asyncio
-from helper.settings_handler import user_setting_state
+from plugins.settings_handler import user_setting_state
 # Dictionary to store user session generation states and settings input states
 user_states = {}
 
