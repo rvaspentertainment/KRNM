@@ -3,19 +3,22 @@ from pyrogram.enums import MessageMediaType
 from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 
-from hachoir.metadata import extractMetadata
-from hachoir.parser import createParser
+from hachior.metadata import extractMetadata
+from hachior.parser import createParser
 
 from helper.utils import progress_for_pyrogram, convert, humanbytes
 from helper.database import db
-from helper.auto_rename import auto_rename_file
+from helper.auto_rename import (
+    auto_rename_file, clean_filename, extract_year, 
+    detect_languages, detect_quality, detect_source,
+    detect_ott, detect_encoding, detect_audio, detect_media_type
+)
 from bot import bot, premium_client
 
 from asyncio import sleep
 from PIL import Image, ImageDraw, ImageFont
 import os, time, re, requests
 from io import BytesIO
-from helper.auto_rename import auto_rename_file, clean_filename
 
 user_rename_state = {}
 
@@ -43,28 +46,6 @@ async def handle_movie_name_input(client, message, original_message, file, filen
         ott = detect_ott(filename)
         encoding = detect_encoding(filename)
         audio_list = detect_audio(filename)
-        media_type = detect_media_type(file, original_message.media)
-        
-        # Ask for missing critical info
-        missing_info = []
-        
-        if not year:
-            missing_info.append("year")
-        if not languages:
-            missing_info.append("language")
-        
-        if missing_info:
-            # Ask for missing info
-            await message.reply_text(
-                text=f"**🔍 Missing Information Detected**\n\nPlease provide:\n\n" +
-                     "\n".join([f"• {info.title()}" for info in missing_info]) +
-                     f"\n\nExample: `2024, Tamil` or `2023, Hindi+English`",
-                reply_to_message_id=message.id,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Cancel", callback_data="close")
-                ]])
-            )
-            return
         
         # Build new filename
         components = [movie_name]
@@ -132,6 +113,7 @@ async def handle_movie_name_input(client, message, original_message, file, filen
         print(f"Error handling movie name: {e}")
         await message.reply_text(f"❌ Error: {e}")
 
+
 async def simple_clean_rename(filename, settings):
     """Simple rename by removing and replacing words only"""
     try:
@@ -175,6 +157,7 @@ async def simple_clean_rename(filename, settings):
         print(f"Error in simple_clean_rename: {e}")
         return filename
 
+
 def extract_episode_number(filename):
     """Extract episode number from filename"""
     try:
@@ -187,6 +170,20 @@ def extract_episode_number(filename):
     except Exception as e:
         print(f"Error extracting episode: {e}")
     return "Unknown"
+
+
+def download_thumbnail(url, save_path):
+    """Download thumbnail from URL"""
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            img = Image.open(BytesIO(response.content))
+            img = img.convert("RGB")
+            img.save(save_path, "JPEG")
+            return True
+    except Exception as e:
+        print(f"Error downloading thumbnail: {e}")
+    return False
 
 
 def add_text_to_thumbnail(image_path, episode_number, output_path):
@@ -222,20 +219,6 @@ def add_text_to_thumbnail(image_path, episode_number, output_path):
     except Exception as e:
         print(f"Error adding text to thumbnail: {e}")
         return False
-
-
-def download_thumbnail(url, save_path):
-    """Download thumbnail from URL"""
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            img = Image.open(BytesIO(response.content))
-            img = img.convert("RGB")
-            img.save(save_path, "JPEG")
-            return True
-    except Exception as e:
-        print(f"Error downloading thumbnail: {e}")
-    return False
 
 
 @Client.on_message(filters.private & (filters.document | filters.audio | filters.video))
@@ -278,6 +261,7 @@ async def rename_start(client, message):
         except:
             pass
 
+
 @Client.on_message(filters.private & filters.text & ~filters.command(["start", "cancel", "help", "string"]))
 async def handle_rename_input(client, message):
     user_id = message.from_user.id
@@ -297,6 +281,7 @@ async def handle_rename_input(client, message):
                 settings
             )
             del user_rename_state[user_id]
+
 
 async def handle_jai_bajarangabali(client, message, file, filename):
     """Handle Jai Bajarangabali special upload"""
@@ -386,6 +371,22 @@ async def handle_jai_bajarangabali(client, message, file, filename):
             await ms.edit("✅ Sᴜᴄᴄᴇssғᴜʟʟy Uᴩʟᴏᴀᴅᴇᴅ Tᴏ Cʜᴀɴɴᴇʟ!")
         except Exception as e:
             await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+        finally:
+            # Cleanup
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                if ph_path and os.path.exists(ph_path):
+                    os.remove(ph_path)
+            except Exception as e:
+                print(f"Cleanup error: {e}")
+    
+    except Exception as e:
+        print(f"Error in doc handler: {e}")
+        try:
+            await update.message.edit(f"❌ Eʀʀᴏʀ: {e}")
+        except:
+            pass {e}")
         
         # Cleanup
         try:
@@ -410,28 +411,22 @@ async def handle_auto_rename(client, message, file, filename, user_id):
     """Handle auto rename mode"""
     try:
         settings = await db.get_all_rename_settings(user_id)
-        always_ask = settings.get('always_ask', True)
         
         # Check if auto detection is enabled
         auto_detect_enabled = settings.get('auto_detect_language', False) or settings.get('auto_detect_year', False)
         
         if auto_detect_enabled:
-            # Ask for movie name first
+            # Ask for movie name using reply markup
             await message.reply_text(
                 text=f"**🎬 Auto Rename Mode**\n\n**Current Filename:**\n`{filename}`\n\n**Please send the Movie/Show Name:**\n\nExample: `Avatar The Way of Water`\n\n_Bot will auto-detect year, language, quality, etc._",
                 reply_to_message_id=message.id,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Cancel", callback_data="close")
-                ]])
+                reply_markup=ForceReply(True, placeholder="Enter movie name...")
             )
-            # Store state for next message
             return
         else:
             # Simple clean mode - just remove/replace words
             try:
                 cleaned_name = await simple_clean_rename(filename, settings)
-                
-                # Direct proceed without asking
                 await show_upload_options(client, message, cleaned_name, file)
             
             except Exception as e:
@@ -442,13 +437,14 @@ async def handle_auto_rename(client, message, file, filename, user_id):
         print(f"Error in handle_auto_rename: {e}")
         await message.reply_text(f"❌ Error: {e}")
 
+
 async def handle_manual_rename(client, message, file, filename):
     """Handle manual rename mode"""
     try:
         await message.reply_text(
             text=f"**__Pʟᴇᴀꜱᴇ Eɴᴛᴇʀ Nᴇᴡ Fɪʟᴇɴᴀᴍᴇ...__**\n\n**Oʟᴅ Fɪʟᴇ Nᴀᴍᴇ** :- `{filename}`",
             reply_to_message_id=message.id,  
-            reply_markup=ForceReply(True)
+            reply_markup=ForceReply(True, placeholder="Enter new filename...")
         )       
         await sleep(30)
     except FloodWait as e:
@@ -457,7 +453,7 @@ async def handle_manual_rename(client, message, file, filename):
             await message.reply_text(
                 text=f"**__Pʟᴇᴀꜱᴇ Eɴᴛᴇʀ Nᴇᴡ Fɪʟᴇɴᴀᴍᴇ...__**\n\n**Oʟᴅ Fɪʟᴇ Nᴀᴍᴇ** :- `{filename}`",
                 reply_to_message_id=message.id,  
-                reply_markup=ForceReply(True)
+                reply_markup=ForceReply(True, placeholder="Enter new filename...")
             )
         except Exception as e:
             print(f"Error in FloodWait retry: {e}")
@@ -526,7 +522,7 @@ async def auto_edit_handler(client, query):
         await query.message.reply(
             text=f"**__Pʟᴇᴀꜱᴇ Eɴᴛᴇʀ Nᴇᴡ Fɪʟᴇɴᴀᴍᴇ...__**\n\n**Oʟᴅ Fɪʟᴇ Nᴀᴍᴇ** :- `{file.file_name}`",
             reply_to_message_id=original_msg.id,  
-            reply_markup=ForceReply(True)
+            reply_markup=ForceReply(True, placeholder="Enter new filename...")
         )
     except Exception as e:
         print(f"Error in auto_edit_handler: {e}")
@@ -567,7 +563,7 @@ async def doc(bot, update):
         upload_client = premium_client if premium_client else bot
         
         new_name = update.message.text
-        new_filename = new_name.split(":-")[1].strip().replace("`", "")
+        new_filename = new_name.split(":-")[-1].strip().replace("`", "")
         file_path = f"downloads/{new_filename}"
         file = update.message.reply_to_message
         user_id = update.message.chat.id
@@ -602,6 +598,7 @@ async def doc(bot, update):
         c_caption = await db.get_caption(user_id)
         c_thumb = await db.get_thumbnail(user_id)
 
+        # Priority 1: Use custom caption if set
         if c_caption:
             try:
                 caption = c_caption.format(
@@ -613,6 +610,10 @@ async def doc(bot, update):
                 print(f"Caption error: {e}")
                 await ms.edit(text=f"Yᴏᴜʀ Cᴀᴩᴛɪᴏɴ Eʀʀᴏʀ Exᴄᴇᴩᴛ Kᴇyᴡᴏʀᴅ Aʀɢᴜᴍᴇɴᴛ ●> ({e})")
                 return
+        # Priority 2: Use file caption if exists
+        elif file.caption:
+            caption = file.caption
+        # Priority 3: Use filename
         else:
             caption = f"**{new_filename}**"
     
@@ -676,20 +677,4 @@ async def doc(bot, update):
         
         except Exception as e:
             print(f"Upload error: {e}")
-            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
-        finally:
-            # Cleanup
-            try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                if ph_path and os.path.exists(ph_path):
-                    os.remove(ph_path)
-            except Exception as e:
-                print(f"Cleanup error: {e}")
-    
-    except Exception as e:
-        print(f"Error in doc handler: {e}")
-        try:
-            await update.message.edit(f"❌ Eʀʀᴏʀ: {e}")
-        except:
-            pass
+            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ:
