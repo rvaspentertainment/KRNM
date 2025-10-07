@@ -12,12 +12,12 @@ async def keep_alive_ping():
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("https://running-aime-file-get-81528fdc.koyeb.app/") as resp:  # Replace with your real app URL
+                async with session.get("https://running-aime-file-get-81528fdc.koyeb.app/") as resp:
                     print(f"Pinged self: {resp.status}")
         except Exception as e:
             print(f"Ping error: {e}")
         await asyncio.sleep(60)
-        
+
 class Bot(Client):
 
     def __init__(self):
@@ -43,16 +43,64 @@ class Bot(Client):
             await app.setup()       
             await web.TCPSite(app, "0.0.0.0", 8080).start()     
         print(f"{me.first_name} Iꜱ Sᴛᴀʀᴛᴇᴅ.....✨️")
+        
+        # Start premium client if available
+        if premium_client:
+            await premium_client.start()
+            print("✅ Premium Client Started (4GB Upload Limit)")
+        
         for id in Config.ADMIN:
-            try: await self.send_message(id, f"**__{me.first_name}  Iꜱ Sᴛᴀʀᴛᴇᴅ.....✨️__**")                                
-            except: pass
+            try: 
+                status_msg = f"**__{me.first_name} Iꜱ Sᴛᴀʀᴛᴇᴅ.....✨️__**"
+                if premium_client:
+                    status_msg += "\n\n✅ **Premium Mode Active (4GB Upload)**"
+                await self.send_message(id, status_msg)
+            except: 
+                pass
+                
         if Config.LOG_CHANNEL:
             try:
                 curr = datetime.now(timezone("Asia/Kolkata"))
                 date = curr.strftime('%d %B, %Y')
                 time = curr.strftime('%I:%M:%S %p')
-                await self.send_message(Config.LOG_CHANNEL, f"**__{me.mention} Iꜱ Rᴇsᴛᴀʀᴛᴇᴅ !!**\n\n📅 Dᴀᴛᴇ : `{date}`\n⏰ Tɪᴍᴇ : `{time}`\n🌐 Tɪᴍᴇᴢᴏɴᴇ : `Asia/Kolkata`\n\n🉐 Vᴇʀsɪᴏɴ : `v{__version__} (Layer {layer})`</b>")                                
+                log_msg = f"**__{me.mention} Iꜱ Rᴇsᴛᴀʀᴛᴇᴅ !!**\n\n📅 Dᴀᴛᴇ : `{date}`\n⏰ Tɪᴍᴇ : `{time}`\n🌐 Tɪᴍᴇᴢᴏɴᴇ : `Asia/Kolkata`\n\n🉐 Vᴇʀsɪᴏɴ : `v{__version__} (Layer {layer})`"
+                if premium_client:
+                    log_msg += "\n\n✅ **Premium Session Active**\n📤 Upload Limit: **4GB**"
+                else:
+                    log_msg += "\n\n⚠️ **Bot Mode Only**\n📤 Upload Limit: **50MB**"
+                await self.send_message(Config.LOG_CHANNEL, log_msg)
             except:
                 print("Pʟᴇᴀꜱᴇ Mᴀᴋᴇ Tʜɪꜱ Iꜱ Aᴅᴍɪɴ Iɴ Yᴏᴜʀ Lᴏɢ Cʜᴀɴɴᴇʟ")
 
-Bot().run()
+    async def stop(self, *args):
+        if premium_client:
+            await premium_client.stop()
+            print("Premium Client Stopped")
+        await super().stop()
+        print("Bot Stopped")
+
+# Initialize bot
+bot = Bot()
+
+# Initialize premium client if session provided
+premium_client = None
+if hasattr(Config, 'PREMIUM_SESSION') and Config.PREMIUM_SESSION:
+    try:
+        premium_client = Client(
+            name="premium_uploader",
+            api_id=Config.API_ID,
+            api_hash=Config.API_HASH,
+            session_string=Config.PREMIUM_SESSION,
+            workers=50,
+            sleep_threshold=15,
+        )
+        print("✅ Premium Client Initialized")
+    except Exception as e:
+        print(f"⚠️ Premium Client Error: {e}")
+        premium_client = None
+else:
+    print("⚠️ No Premium Session - Using Bot Only (50MB limit)")
+
+# Run the bot
+if __name__ == "__main__":
+    bot.run()
