@@ -1,4 +1,3 @@
-
 import re, os, time
 
 id_pattern = re.compile(r'^.\d+$') 
@@ -9,6 +8,9 @@ class Config(object):
     API_HASH  = os.environ.get("API_HASH", "")
     BOT_TOKEN = os.environ.get("BOT_TOKEN", "") 
    
+    # premium session config for 4GB uploads
+    PREMIUM_SESSION = os.environ.get("PREMIUM_SESSION", "")
+    
     # database config
     DB_NAME = os.environ.get("DB_NAME","Cluster0")     
     DB_URL  = os.environ.get("DB_URL","")
@@ -18,7 +20,7 @@ class Config(object):
     START_PIC   = os.environ.get("START_PIC", "")
     ADMIN       = [int(admin) if id_pattern.search(admin) else admin for admin in os.environ.get('ADMIN', '').split()]
     FORCE_SUB   = os.environ.get("FORCE_SUB", "") 
-    LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", None))
+    LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "0"))
 
     # wes response configuration     
     WEBHOOK = bool(os.environ.get("WEBHOOK", "True"))
@@ -119,4 +121,3 @@ Join us :- @TG_UPDATES1 </b>"""
 @TG_UPDATES1
 
 𝚃𝙷𝙰𝙽𝙺 𝚈𝙾𝚄 𝙰𝙻𝙻 🫶</b>"""
-    
