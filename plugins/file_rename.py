@@ -15,6 +15,7 @@ from asyncio import sleep
 from PIL import Image, ImageDraw, ImageFont
 import os, time, re, requests
 from io import BytesIO
+from helper.auto_rename import auto_rename_file, clean_filename
 
 
 # Configuration for Jai Bajarangabali auto-upload
@@ -24,6 +25,154 @@ JAI_BAJARANGABALI_CONFIG = {
     "caption_template": "**Jai Bajarangabali Episode {episode}**\n\n📺 Quality: {quality}\n💾 Size: {filesize}\n⏱ Duration: {duration}"
 }
 
+async def handle_movie_name_input(client, message, original_message, file, filename, settings):
+    """Handle movie name input for auto rename"""
+    try:
+        movie_name = message.text.strip()
+        
+        if not movie_name or len(movie_name) < 2:
+            await message.reply_text("❌ Invalid movie name. Please try again.")
+            return
+        
+        # Now detect other info from original filename
+        year = extract_year(filename)
+        languages = detect_languages(filename)
+        quality = detect_quality(filename)
+        source = detect_source(filename)
+        ott = detect_ott(filename)
+        encoding = detect_encoding(filename)
+        audio_list = detect_audio(filename)
+        media_type = detect_media_type(file, original_message.media)
+        
+        # Ask for missing critical info
+        missing_info = []
+        
+        if not year:
+            missing_info.append("year")
+        if not languages:
+            missing_info.append("language")
+        
+        if missing_info:
+            # Ask for missing info
+            await message.reply_text(
+                text=f"**🔍 Missing Information Detected**\n\nPlease provide:\n\n" +
+                     "\n".join([f"• {info.title()}" for info in missing_info]) +
+                     f"\n\nExample: `2024, Tamil` or `2023, Hindi+English`",
+                reply_to_message_id=message.id,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Cancel", callback_data="close")
+                ]])
+            )
+            return
+        
+        # Build new filename
+        components = [movie_name]
+        
+        if year:
+            components.append(f"({year})")
+        
+        if languages:
+            components.append('+'.join(languages))
+        
+        if quality:
+            components.append(quality)
+        
+        if source:
+            components.append(source)
+        
+        if ott:
+            components.append(ott)
+        
+        if encoding:
+            components.append(encoding)
+        
+        if audio_list:
+            components.extend(audio_list)
+        
+        # Apply prefix/suffix
+        prefix = settings.get('prefix', '')
+        suffix = settings.get('suffix', '')
+        
+        if prefix:
+            components.insert(0, prefix)
+        if suffix:
+            components.append(suffix)
+        
+        # Join and clean
+        final_name = '.'.join(filter(None, components))
+        final_name = re.sub(r'\.+', '.', final_name)
+        
+        # Add extension
+        if '.' in filename:
+            ext = filename.rsplit('.', 1)[-1]
+        else:
+            ext = 'mkv'
+        
+        new_filename = f"{final_name}.{ext}"
+        
+        # Show preview if always_ask is enabled
+        if settings.get('always_ask', True):
+            await message.reply_text(
+                text=f"**🤖 Auto Rename Preview**\n\n**Old Name:**\n`{filename}`\n\n**New Name:**\n`{new_filename}`\n\n**Detected:**\n" +
+                     f"├ Year: {year or 'N/A'}\n" +
+                     f"├ Language: {', '.join(languages) if languages else 'N/A'}\n" +
+                     f"├ Quality: {quality or 'N/A'}\n" +
+                     f"└ Source: {source or 'N/A'}\n\n**Click Confirm to proceed**",
+                reply_to_message_id=original_message.id,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ Confirm", callback_data=f"auto_confirm_{original_message.id}"),
+                    InlineKeyboardButton("✏️ Edit", callback_data=f"auto_edit_{original_message.id}")
+                ]])
+            )
+        else:
+            await show_upload_options(client, original_message, new_filename, file)
+    
+    except Exception as e:
+        print(f"Error handling movie name: {e}")
+        await message.reply_text(f"❌ Error: {e}")
+
+async def simple_clean_rename(filename, settings):
+    """Simple rename by removing and replacing words only"""
+    try:
+        # Get extension
+        if '.' in filename:
+            name, ext = filename.rsplit('.', 1)
+        else:
+            name = filename
+            ext = 'mkv'
+        
+        # Clean filename
+        cleaned = clean_filename(
+            name,
+            remove_words=settings.get('remove_words', []),
+            replace_words=settings.get('replace_words', {}),
+            auto_clean=settings.get('auto_clean', True)
+        )
+        
+        # Remove special characters that shouldn't be there
+        cleaned = re.sub(r'[#@\[\]\(\)\{\}]', '', cleaned)
+        cleaned = re.sub(r'[._-]+', ' ', cleaned)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        
+        # Apply prefix/suffix
+        prefix = settings.get('prefix', '')
+        suffix = settings.get('suffix', '')
+        
+        components = []
+        if prefix:
+            components.append(prefix)
+        components.append(cleaned)
+        if suffix:
+            components.append(suffix)
+        
+        final_name = '.'.join(filter(None, components))
+        final_name = re.sub(r'\.+', '.', final_name)
+        
+        return f"{final_name}.{ext}"
+    
+    except Exception as e:
+        print(f"Error in simple_clean_rename: {e}")
+        return filename
 
 def extract_episode_number(filename):
     """Extract episode number from filename"""
@@ -241,62 +390,23 @@ async def handle_auto_rename(client, message, file, filename, user_id):
         auto_detect_enabled = settings.get('auto_detect_language', False) or settings.get('auto_detect_year', False)
         
         if auto_detect_enabled:
-            # Auto detect mode - with confirmation if always_ask is ON
-            try:
-                new_filename = await auto_rename_file(
-                    filename, 
-                    settings, 
-                    message.media, 
-                    file
-                )
-                
-                if always_ask:
-                    # Show preview and ask for confirmation
-                    await message.reply_text(
-                        text=f"**🤖 Auto Rename Preview**\n\n**Old Name:**\n`{filename}`\n\n**New Name:**\n`{new_filename}`\n\n**Click Confirm to proceed or Edit to change**",
-                        reply_to_message_id=message.id,
-                        reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton("✅ Confirm", callback_data=f"auto_confirm_{message.id}"),
-                            InlineKeyboardButton("✏️ Edit", callback_data=f"auto_edit_{message.id}")
-                        ]])
-                    )
-                else:
-                    # Direct proceed without asking
-                    await show_upload_options(client, message, new_filename, file)
-            
-            except Exception as e:
-                print(f"Auto rename error: {e}")
-                await message.reply_text(f"❌ Auto Rename Error: {e}\n\nFalling back to manual mode...")
-                await handle_manual_rename(client, message, file, filename)
+            # Ask for movie name first
+            await message.reply_text(
+                text=f"**🎬 Auto Rename Mode**\n\n**Current Filename:**\n`{filename}`\n\n**Please send the Movie/Show Name:**\n\nExample: `Avatar The Way of Water`\n\n_Bot will auto-detect year, language, quality, etc._",
+                reply_to_message_id=message.id,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Cancel", callback_data="close")
+                ]])
+            )
+            # Store state for next message
+            return
         else:
-            # Simple clean mode - just remove/replace words, no confirmation
+            # Simple clean mode - just remove/replace words
             try:
-                new_filename = clean_filename(
-                    filename,
-                    remove_words=settings.get('remove_words', []),
-                    replace_words=settings.get('replace_words', {}),
-                    auto_clean=settings.get('auto_clean', True)
-                )
-                
-                # Apply prefix/suffix
-                if '.' in new_filename:
-                    name, ext = new_filename.rsplit('.', 1)
-                else:
-                    name = new_filename
-                    ext = 'mkv'
-                
-                prefix = settings.get('prefix', '')
-                suffix = settings.get('suffix', '')
-                
-                if prefix:
-                    name = f"{prefix} {name}"
-                if suffix:
-                    name = f"{name} {suffix}"
-                
-                new_filename = f"{name}.{ext}"
+                cleaned_name = await simple_clean_rename(filename, settings)
                 
                 # Direct proceed without asking
-                await show_upload_options(client, message, new_filename, file)
+                await show_upload_options(client, message, cleaned_name, file)
             
             except Exception as e:
                 print(f"Clean error: {e}")
