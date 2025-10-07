@@ -6,7 +6,7 @@ from helper.database import db
 user_setting_state = {}
 
 
-@Client.on_message(filters.private & filters.text & ~filters.command(["start", "cancel", "help"]))
+@Client.on_message(filters.private & filters.text & ~filters.command(["start", "cancel", "help", "string"]))
 async def handle_settings_input(client, message):
     user_id = message.from_user.id
     text = message.text.strip()
@@ -21,9 +21,9 @@ async def handle_settings_input(client, message):
         if setting_type == "prefix":
             await db.set_prefix(user_id, text)
             await message.reply_text(
-                f"✅ **Pʀᴇꜰɪx Sᴇᴛ:** `{text}`",
+                f"✅ **Prefix Set:** `{text}`",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("◀️ Bᴀᴄᴋ ᴛᴏ Sᴇᴛᴛɪɴɢꜱ", callback_data="auto_settings")
+                    InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
                 ]])
             )
             del user_setting_state[user_id]
@@ -31,47 +31,92 @@ async def handle_settings_input(client, message):
         elif setting_type == "suffix":
             await db.set_suffix(user_id, text)
             await message.reply_text(
-                f"✅ **Sᴜꜰꜰɪx Sᴇᴛ:** `{text}`",
+                f"✅ **Suffix Set:** `{text}`",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("◀️ Bᴀᴄᴋ ᴛᴏ Sᴇᴛᴛɪɴɢꜱ", callback_data="auto_settings")
+                    InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
+                ]])
+            )
+            del user_setting_state[user_id]
+        
+        elif setting_type == "upload_channel":
+            # Handle channel ID
+            channel_id = text
+            if channel_id.startswith('@'):
+                # Username format
+                pass
+            elif channel_id.lstrip('-').isdigit():
+                # Numeric ID
+                channel_id = int(channel_id)
+            else:
+                await message.reply_text("❌ Invalid channel ID/username format")
+                return
+            
+            await db.set_upload_channel(user_id, channel_id)
+            await message.reply_text(
+                f"✅ **Upload Channel Set:** `{channel_id}`",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("◀️ Back to Settings", callback_data="upload_settings")
                 ]])
             )
             del user_setting_state[user_id]
         
         elif setting_type == "remove_words":
-            # Parse comma-separated words
-            words = [w.strip() for w in text.split(',') if w.strip()]
-            await db.set_remove_words(user_id, words)
-            await message.reply_text(
-                f"✅ **Rᴇᴍᴏᴠᴇ Wᴏʀᴅꜱ Sᴇᴛ:** `{', '.join(words)}`",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("◀️ Bᴀᴄᴋ ᴛᴏ Sᴇᴛᴛɪɴɢꜱ", callback_data="auto_settings")
-                ]])
-            )
+            # Parse comma-separated words - trim and clean
+            words = []
+            for w in text.split(','):
+                w = w.strip()
+                if w:
+                    words.append(w)
+            
+            if words:
+                await db.set_remove_words(user_id, words)
+                await message.reply_text(
+                    f"✅ **Remove Words Set ({len(words)} words):**\n`{', '.join(words)}`",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
+                    ]])
+                )
+            else:
+                await message.reply_text("❌ No valid words provided")
+                return
             del user_setting_state[user_id]
         
         elif setting_type == "replace_words":
             # Parse word pairs (old:new, old2:new2)
-            pairs = [p.strip() for p in text.split(',') if ':' in p]
+            pairs = [p.strip() for p in text.split(',')]
             replace_dict = {}
+            
             for pair in pairs:
                 if ':' in pair:
-                    old, new = pair.split(':', 1)
-                    replace_dict[old.strip()] = new.strip()
+                    parts = pair.split(':', 1)
+                    if len(parts) == 2:
+                        old, new = parts[0].strip(), parts[1].strip()
+                        if old and new:
+                            replace_dict[old] = new
             
-            await db.set_replace_words(user_id, replace_dict)
-            words_display = ', '.join([f"{k}→{v}" for k,v in replace_dict.items()])
-            await message.reply_text(
-                f"✅ **Rᴇᴘʟᴀᴄᴇ Wᴏʀᴅꜱ Sᴇᴛ:** `{words_display}`",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("◀️ Bᴀᴄᴋ ᴛᴏ Sᴇᴛᴛɪɴɢꜱ", callback_data="auto_settings")
-                ]])
-            )
+            if replace_dict:
+                await db.set_replace_words(user_id, replace_dict)
+                words_display = '\n'.join([f"• {k} → {v}" for k, v in replace_dict.items()])
+                await message.reply_text(
+                    f"✅ **Replace Words Set ({len(replace_dict)} pairs):**\n\n{words_display}",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
+                    ]])
+                )
+            else:
+                await message.reply_text(
+                    "❌ **Invalid Format!**\n\nUse: `old:new, old2:new2`",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
+                    ]])
+                )
+                return
             del user_setting_state[user_id]
     
     except Exception as e:
-        await message.reply_text(f"❌ **Eʀʀᴏʀ:** {e}")
-        del user_setting_state[user_id]
+        await message.reply_text(f"❌ **Error:** {e}")
+        if user_id in user_setting_state:
+            del user_setting_state[user_id]
 
 
 @Client.on_message(filters.private & filters.command("cancel"))
@@ -80,16 +125,8 @@ async def cancel_setting(client, message):
     if user_id in user_setting_state:
         del user_setting_state[user_id]
         await message.reply_text(
-            "❌ **Cᴀɴᴄᴇʟʟᴇᴅ**",
+            "❌ **Cancelled**",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("◀️ Bᴀᴄᴋ ᴛᴏ Sᴇᴛᴛɪɴɢꜱ", callback_data="auto_settings")
+                InlineKeyboardButton("◀️ Back to Settings", callback_data="settings")
             ]])
         )
-
-
-# Update callback handlers to set state
-@Client.on_callback_query(filters.regex("^(set_prefix|set_suffix|set_remove_words|set_replace_words)$"))
-async def set_state_handler(client, query):
-    user_id = query.from_user.id
-    setting = query.data.replace("set_", "")
-    user_setting_state[user_id] = setting
