@@ -677,4 +677,4 @@ async def doc(bot, update):
         
         except Exception as e:
             print(f"Upload error: {e}")
-            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ:
+            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
