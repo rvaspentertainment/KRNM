@@ -17,6 +17,7 @@ import os, time, re, requests
 from io import BytesIO
 from helper.auto_rename import auto_rename_file, clean_filename
 
+user_rename_state = {}
 
 # Configuration for Jai Bajarangabali auto-upload
 JAI_BAJARANGABALI_CONFIG = {
@@ -244,22 +245,28 @@ async def rename_start(client, message):
         filename = file.file_name
         user_id = message.from_user.id
         
-        # Use premium client for file size check if available
         max_size = 4000 * 1024 * 1024 if premium_client else 2000 * 1024 * 1024
         max_size_text = "4GB" if premium_client else "2GB"
         
         if file.file_size > max_size:
-            return await message.reply_text(f"Sᴏʀʀy Bʀᴏ Tʜɪꜱ Bᴏᴛ Dᴏᴇꜱɴ'ᴛ Sᴜᴩᴩᴏʀᴛ Uᴩʟᴏᴀᴅɪɴɢ Fɪʟᴇꜱ Bɪɢɢᴇʀ Tʜᴀɴ {max_size_text}")
+            return await message.reply_text(f"Sorry, this bot doesn't support files bigger than {max_size_text}")
 
         # Check for Jai Bajarangabali special handling
         if filename.lower().startswith("jai bajarangabali") or filename.lower().startswith("jai.bajarangabali"):
             await handle_jai_bajarangabali(client, message, file, filename)
             return
 
-        # Check rename mode (manual or auto)
+        # Check rename mode
         rename_mode = await db.get_rename_mode(user_id)
         
         if rename_mode == "auto":
+            # Store state for auto rename
+            user_rename_state[user_id] = {
+                'message': message,
+                'file': file,
+                'filename': filename,
+                'step': 'movie_name'
+            }
             await handle_auto_rename(client, message, file, filename, user_id)
         else:
             await handle_manual_rename(client, message, file, filename)
@@ -267,10 +274,29 @@ async def rename_start(client, message):
     except Exception as e:
         print(f"Error in rename_start: {e}")
         try:
-            await message.reply_text(f"❌ Eʀʀᴏʀ: {e}")
+            await message.reply_text(f"❌ Error: {e}")
         except:
             pass
 
+@Client.on_message(filters.private & filters.text & ~filters.command(["start", "cancel", "help", "string"]))
+async def handle_rename_input(client, message):
+    user_id = message.from_user.id
+    
+    # Check if user is in rename state
+    if user_id in user_rename_state:
+        state = user_rename_state[user_id]
+        
+        if state.get('step') == 'movie_name':
+            settings = await db.get_all_rename_settings(user_id)
+            await handle_movie_name_input(
+                client, 
+                message, 
+                state['message'], 
+                state['file'], 
+                state['filename'], 
+                settings
+            )
+            del user_rename_state[user_id]
 
 async def handle_jai_bajarangabali(client, message, file, filename):
     """Handle Jai Bajarangabali special upload"""
