@@ -27,6 +27,70 @@ JAI_BAJARANGABALI_CONFIG = {
 }
 
 
+def sanitize_filename(filename):
+    """
+    Sanitize filename for file system compatibility
+    - Removes non-ASCII characters (emojis, special unicode)
+    - Removes invalid filesystem characters
+    - Preserves extension
+    """
+    try:
+        # Split filename and extension
+        if '.' in filename:
+            name_part = filename.rsplit('.', 1)[0]
+            extension = filename.rsplit('.', 1)[1]
+        else:
+            name_part = filename
+            extension = 'mkv'
+        
+        # Remove non-ASCII characters (emojis, unicode)
+        name_part = re.sub(r'[^\x00-\x7F]+', '', name_part)
+        
+        # Remove invalid filesystem characters
+        name_part = re.sub(r'[<>:"|?*]', '', name_part)
+        
+        # Replace forward/backward slashes
+        name_part = name_part.replace('/', '_').replace('\\', '_')
+        
+        # Remove multiple spaces
+        name_part = re.sub(r'\s+', ' ', name_part).strip()
+        
+        # If name becomes empty, generate a fallback
+        if not name_part or name_part.isspace():
+            name_part = f"renamed_file_{int(time.time())}"
+        
+        return f"{name_part}.{extension}"
+    except Exception as e:
+        print(f"Error sanitizing filename: {e}")
+        return f"renamed_file_{int(time.time())}.mkv"
+
+
+def beautify_filename(filename):
+    """
+    Beautify filename for display after upload
+    - Replaces dots and underscores with spaces (except extension)
+    - Cleans up formatting
+    """
+    try:
+        # Split filename and extension
+        if '.' in filename:
+            name_part = filename.rsplit('.', 1)[0]
+            extension = filename.rsplit('.', 1)[1]
+        else:
+            return filename
+        
+        # Replace dots and underscores with spaces
+        name_part = name_part.replace('.', ' ').replace('_', ' ')
+        
+        # Remove multiple spaces
+        name_part = re.sub(r'\s+', ' ', name_part).strip()
+        
+        return f"{name_part}.{extension}"
+    except Exception as e:
+        print(f"Error beautifying filename: {e}")
+        return filename
+
+
 def extract_episode_number(filename):
     """Extract episode number from filename"""
     try:
@@ -153,9 +217,14 @@ async def handle_jai_bajarangabali(client, message, file, filename):
         episode_number = extract_episode_number(filename)
         upload_client = premium_client if premium_client else client
         
-        file_path = f"downloads/{new_name}"
+        # Sanitize filename for download
+        safe_filename = sanitize_filename(new_name)
+        file_path = f"downloads/{safe_filename}"
         thumb_path = f"downloads/thumb_{episode_number}.jpg"
         edited_thumb_path = f"downloads/thumb_edited_{episode_number}.jpg"
+        
+        # Ensure downloads directory exists
+        os.makedirs("downloads", exist_ok=True)
         
         status_text = "🔄 Aᴜᴛᴏ-Pʀᴏᴄᴇssɪɴɢ Jᴀɪ Bᴀᴊᴀʀᴀɴɢᴀʙᴀʟɪ...\n📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ..."
         if premium_client:
@@ -188,6 +257,10 @@ async def handle_jai_bajarangabali(client, message, file, filename):
             ph_path = thumb_path
         
         media = getattr(message, message.media.value)
+        
+        # Beautify filename for caption
+        display_name = beautify_filename(new_name)
+        
         try:
             caption = JAI_BAJARANGABALI_CONFIG["caption_template"].format(
                 episode=episode_number,
@@ -296,9 +369,12 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
     try:
         upload_client = premium_client if premium_client else client
         
-        # Create safe filename
-        safe_filename = new_filename.replace('/', '_').replace('\\', '_')
+        # Sanitize filename for file system
+        safe_filename = sanitize_filename(new_filename)
         file_path = f"downloads/{safe_filename}"
+        
+        # Beautify filename for display in caption
+        display_filename = beautify_filename(new_filename)
         
         # Ensure downloads directory exists
         os.makedirs("downloads", exist_ok=True)
@@ -336,7 +412,7 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
         if c_caption:
             try:
                 caption = c_caption.format(
-                    filename=new_filename, 
+                    filename=display_filename, 
                     filesize=humanbytes(media.file_size), 
                     duration=convert(duration)
                 )
@@ -347,9 +423,9 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
         # Priority 2: Use file caption if exists
         elif file_message.caption:
             caption = file_message.caption
-        # Priority 3: Use filename
+        # Priority 3: Use beautified filename
         else:
-            caption = f"**{new_filename}**"
+            caption = f"**{display_filename}**"
     
         if (media.thumbs or c_thumb):
             try:
