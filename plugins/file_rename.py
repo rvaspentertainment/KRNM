@@ -28,67 +28,18 @@ JAI_BAJARANGABALI_CONFIG = {
 
 
 def sanitize_filename(filename):
-    """
-    Sanitize filename for file system compatibility
-    - Removes non-ASCII characters (emojis, special unicode)
-    - Removes invalid filesystem characters
-    - Preserves extension
-    """
-    try:
-        # Split filename and extension
-        if '.' in filename:
-            name_part = filename.rsplit('.', 1)[0]
-            extension = filename.rsplit('.', 1)[1]
-        else:
-            name_part = filename
-            extension = 'mkv'
-        
-        # Remove non-ASCII characters (emojis, unicode)
-        name_part = re.sub(r'[^\x00-\x7F]+', '', name_part)
-        
-        # Remove invalid filesystem characters
-        name_part = re.sub(r'[<>:"|?*]', '', name_part)
-        
-        # Replace forward/backward slashes
-        name_part = name_part.replace('/', '_').replace('\\', '_')
-        
-        # Remove multiple spaces
-        name_part = re.sub(r'\s+', ' ', name_part).strip()
-        
-        # If name becomes empty, generate a fallback
-        if not name_part or name_part.isspace():
-            name_part = f"renamed_file_{int(time.time())}"
-        
-        return f"{name_part}.{extension}"
-    except Exception as e:
-        print(f"Error sanitizing filename: {e}")
-        return f"renamed_file_{int(time.time())}.mkv"
-
-
-def beautify_filename(filename):
-    """
-    Beautify filename for display after upload
-    - Replaces dots and underscores with spaces (except extension)
-    - Cleans up formatting
-    """
-    try:
-        # Split filename and extension
-        if '.' in filename:
-            name_part = filename.rsplit('.', 1)[0]
-            extension = filename.rsplit('.', 1)[1]
-        else:
-            return filename
-        
-        # Replace dots and underscores with spaces
-        name_part = name_part.replace('.', ' ').replace('_', ' ')
-        
-        # Remove multiple spaces
-        name_part = re.sub(r'\s+', ' ', name_part).strip()
-        
-        return f"{name_part}.{extension}"
-    except Exception as e:
-        print(f"Error beautifying filename: {e}")
-        return filename
+    """Sanitize filename to make it safe for file system"""
+    # Replace problematic characters with underscore
+    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    # Remove multiple spaces
+    filename = re.sub(r'\s+', ' ', filename)
+    # Strip leading/trailing spaces and dots
+    filename = filename.strip('. ')
+    # Limit filename length (keeping extension)
+    if len(filename) > 200:
+        name, ext = os.path.splitext(filename)
+        filename = name[:200-len(ext)] + ext
+    return filename
 
 
 def extract_episode_number(filename):
@@ -193,7 +144,6 @@ async def handle_jai_bajarangabali(client, message, file, filename):
     """Handle Jai Bajarangabali special upload"""
     file_path = None
     thumb_path = None
-    edited_thumb_path = None
     
     try:
         bracket_match = re.search(r'\[(\d+p)\]', filename)
@@ -214,17 +164,19 @@ async def handle_jai_bajarangabali(client, message, file, filename):
             new_name = filename
             new_quality = "Unknown"
         
+        # Sanitize filename
+        new_name = sanitize_filename(new_name)
+        
         episode_number = extract_episode_number(filename)
         upload_client = premium_client if premium_client else client
         
-        # Sanitize filename for download
-        safe_filename = sanitize_filename(new_name)
-        file_path = f"downloads/{safe_filename}"
-        thumb_path = f"downloads/thumb_{episode_number}.jpg"
-        edited_thumb_path = f"downloads/thumb_edited_{episode_number}.jpg"
-        
         # Ensure downloads directory exists
         os.makedirs("downloads", exist_ok=True)
+        
+        # Use timestamp for unique filenames
+        timestamp = int(time.time())
+        file_path = f"downloads/{timestamp}_{new_name}"
+        thumb_path = f"downloads/thumb_{timestamp}.jpg"
         
         status_text = "🔄 Aᴜᴛᴏ-Pʀᴏᴄᴇssɪɴɢ Jᴀɪ Bᴀᴊᴀʀᴀɴɢᴀʙᴀʟɪ...\n📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ..."
         if premium_client:
@@ -239,7 +191,12 @@ async def handle_jai_bajarangabali(client, message, file, filename):
                 progress_args=("Dᴏᴡɴʟᴏᴀᴅ Sᴛᴀʀᴛᴇᴅ....", ms, time.time())
             )
         except Exception as e:
-            await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+            await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Fᴀɪʟᴇᴅ: {str(e)}")
+            return
+        
+        # Verify file exists
+        if not os.path.exists(file_path):
+            await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Fᴀɪʟᴇᴅ: File not saved properly")
             return
         
         duration = 0
@@ -257,10 +214,6 @@ async def handle_jai_bajarangabali(client, message, file, filename):
             ph_path = thumb_path
         
         media = getattr(message, message.media.value)
-        
-        # Beautify filename for caption
-        display_name = beautify_filename(new_name)
-        
         try:
             caption = JAI_BAJARANGABALI_CONFIG["caption_template"].format(
                 episode=episode_number,
@@ -286,7 +239,7 @@ async def handle_jai_bajarangabali(client, message, file, filename):
             
             await ms.edit("✅ Sᴜᴄᴄᴇssғᴜʟʟy Uᴩʟᴏᴀᴅᴇᴅ Tᴏ Cʜᴀɴɴᴇʟ!")
         except Exception as e:
-            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Fᴀɪʟᴇᴅ: {str(e)}")
     
     except Exception as e:
         print(f"Error in handle_jai_bajarangabali: {e}")
@@ -302,8 +255,6 @@ async def handle_jai_bajarangabali(client, message, file, filename):
                 os.remove(file_path)
             if thumb_path and os.path.exists(thumb_path):
                 os.remove(thumb_path)
-            if edited_thumb_path and os.path.exists(edited_thumb_path):
-                os.remove(edited_thumb_path)
         except Exception as e:
             print(f"Cleanup error: {e}")
 
@@ -329,6 +280,9 @@ async def handle_auto_rename(client, message, file, filename, user_id):
         
         # Auto rename using settings
         new_filename = await auto_rename_file(source_text, settings)
+        
+        # Sanitize filename
+        new_filename = sanitize_filename(new_filename)
         
         # Directly start upload process
         await start_upload_process(client, message, new_filename, file, user_id)
@@ -369,15 +323,15 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
     try:
         upload_client = premium_client if premium_client else client
         
-        # Sanitize filename for file system
+        # Sanitize and create safe filename
         safe_filename = sanitize_filename(new_filename)
-        file_path = f"downloads/{safe_filename}"
-        
-        # Beautify filename for display in caption
-        display_filename = beautify_filename(new_filename)
         
         # Ensure downloads directory exists
         os.makedirs("downloads", exist_ok=True)
+        
+        # Use timestamp for unique filenames to avoid conflicts
+        timestamp = int(time.time())
+        file_path = f"downloads/{timestamp}_{safe_filename}"
         
         status_msg = "Tʀyɪɴɢ Tᴏ Dᴏᴡɴʟᴏᴀᴅɪɴɢ...."
         if premium_client:
@@ -393,7 +347,12 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
             )                    
         except Exception as e:
             print(f"Download error: {e}")
-            await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+            await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Fᴀɪʟᴇᴅ: {str(e)}")
+            return
+        
+        # Verify file was downloaded
+        if not os.path.exists(file_path):
+            await ms.edit(f"❌ Dᴏᴡɴʟᴏᴀᴅ Fᴀɪʟᴇᴅ: File not saved properly")
             return
                 
         duration = 0
@@ -412,7 +371,7 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
         if c_caption:
             try:
                 caption = c_caption.format(
-                    filename=display_filename, 
+                    filename=new_filename, 
                     filesize=humanbytes(media.file_size), 
                     duration=convert(duration)
                 )
@@ -423,9 +382,9 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
         # Priority 2: Use file caption if exists
         elif file_message.caption:
             caption = file_message.caption
-        # Priority 3: Use beautified filename
+        # Priority 3: Use filename
         else:
-            caption = f"**{display_filename}**"
+            caption = f"**{new_filename}**"
     
         if (media.thumbs or c_thumb):
             try:
@@ -434,10 +393,11 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
                 else:
                     ph_path = await upload_client.download_media(media.thumbs[0].file_id)
                 
-                Image.open(ph_path).convert("RGB").save(ph_path)
-                img = Image.open(ph_path)
-                img.resize((320, 320))
-                img.save(ph_path, "JPEG")
+                if ph_path and os.path.exists(ph_path):
+                    Image.open(ph_path).convert("RGB").save(ph_path)
+                    img = Image.open(ph_path)
+                    img = img.resize((320, 320))
+                    img.save(ph_path, "JPEG")
             except Exception as e:
                 print(f"Thumbnail error: {e}")
                 ph_path = None
@@ -490,7 +450,7 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
         
         except Exception as e:
             print(f"Upload error: {e}")
-            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Eʀʀᴏʀ: {e}")
+            await ms.edit(f"❌ Uᴩʟᴏᴀᴅ Fᴀɪʟᴇᴅ: {str(e)}")
     
     except Exception as e:
         print(f"Error in start_upload_process: {e}")
@@ -527,6 +487,9 @@ async def refunc(client, message):
                 else:
                     extn = "mkv"
                 new_name = new_name + "." + extn
+            
+            # Sanitize filename
+            new_name = sanitize_filename(new_name)
             
             await reply_message.delete()
             
