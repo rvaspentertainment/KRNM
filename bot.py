@@ -10,8 +10,9 @@ import asyncio
 
 # Import pyromod for .ask() functionality
 try:
-    from pyromod import listen
+    import pyromod
     PYROMOD_AVAILABLE = True
+    print("✅ Pyromod imported successfully")
 except ImportError:
     PYROMOD_AVAILABLE = False
     print("⚠️ pyromod not installed - .ask() feature disabled")
@@ -41,12 +42,6 @@ class Bot(Client):
 
     async def start(self):
         await super().start()
-        
-        # Patch with pyromod if available
-        if PYROMOD_AVAILABLE:
-            listen.Client.patch_client(self)
-            print("✅ Pyromod listener patched")
-        
         asyncio.create_task(keep_alive_ping())
         me = await self.get_me()
         self.mention = me.mention
@@ -61,9 +56,6 @@ class Bot(Client):
         # Start premium client if available
         if premium_client:
             await premium_client.start()
-            # Patch premium client with pyromod too
-            if PYROMOD_AVAILABLE:
-                listen.Client.patch_client(premium_client)
             print("✅ Premium Client Started (4GB Upload Limit)")
         
         for id in Config.ADMIN:
