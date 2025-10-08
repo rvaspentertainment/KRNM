@@ -193,12 +193,18 @@ async def start(client, message):
 
 # ============ CALLBACK QUERY HANDLER ============
 
+# ============ CALLBACK QUERY HANDLER ============
+
 @Client.on_callback_query()
 async def cb_handler(client, query: CallbackQuery):
     data = query.data 
     user_id = query.from_user.id
     
     try:
+        # REMOVED UPLOAD BUTTON HANDLERS - they were causing the error
+        # Upload buttons (upload_document, upload_video, upload_audio) are no longer used
+        # The new system automatically uploads based on settings
+        
         if data == "start":
             await query.message.edit_text(
                 text=Txt.START_TXT.format(query.from_user.mention),
@@ -345,7 +351,6 @@ async def cb_handler(client, query: CallbackQuery):
             await query.answer("❌ Error occurred", show_alert=True)
         except:
             pass
-
 
 # ============ HELPER FUNCTIONS ============
 
