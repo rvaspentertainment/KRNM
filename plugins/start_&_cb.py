@@ -2,10 +2,19 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message
 from pyrogram.errors import (
     MessageNotModified, ApiIdInvalid, PhoneNumberInvalid, PhoneCodeInvalid, 
-    PhoneCodeExpired, SessionPasswordNeeded, PasswordHashInvalid, ListenerTimeout
+    PhoneCodeExpired, SessionPasswordNeeded, PasswordHashInvalid
 )
 from helper.database import db
 from config import Config, Txt
+import asyncio
+
+# Try to import ListenerTimeout from pyromod if available
+try:
+    from pyromod.exceptions import ListenerTimeout
+except ImportError:
+    # Fallback: create a custom exception if pyromod is not installed
+    class ListenerTimeout(Exception):
+        pass
 
 # ============ STRING SESSION GENERATOR ============
 
@@ -142,6 +151,8 @@ async def generate_string_session(client, message: Message):
     
     except ListenerTimeout:
         await message.reply_text("❌ Timeout! Please try again with /string")
+    except asyncio.TimeoutError:
+        await message.reply_text("❌ Timeout! Please try again with /string")
     except Exception as e:
         await message.reply_text(f"❌ Error: {str(e)}\n\nPlease try again with /string")
 
@@ -272,7 +283,7 @@ async def cb_handler(client, query: CallbackQuery):
                 await channel_msg.reply_text(f"✅ **Channel Set:** `{channel_id}`")
                 await show_upload_settings(client, query)
                 
-            except ListenerTimeout:
+            except (ListenerTimeout, asyncio.TimeoutError):
                 await query.message.reply_text("❌ Timeout!")
                 await show_upload_settings(client, query)
         
@@ -453,7 +464,7 @@ async def handle_prefix_input(client, query):
         await prefix_msg.reply_text(f"✅ **Prefix Set:** `{prefix_msg.text}`")
         await show_auto_settings(client, query)
         
-    except ListenerTimeout:
+    except (ListenerTimeout, asyncio.TimeoutError):
         await query.message.reply_text("❌ Timeout!")
         await show_auto_settings(client, query)
 
@@ -477,7 +488,7 @@ async def handle_suffix_input(client, query):
         await suffix_msg.reply_text(f"✅ **Suffix Set:** `{suffix_msg.text}`")
         await show_auto_settings(client, query)
         
-    except ListenerTimeout:
+    except (ListenerTimeout, asyncio.TimeoutError):
         await query.message.reply_text("❌ Timeout!")
         await show_auto_settings(client, query)
 
@@ -506,7 +517,7 @@ async def handle_remove_words_input(client, query):
         
         await show_auto_settings(client, query)
         
-    except ListenerTimeout:
+    except (ListenerTimeout, asyncio.TimeoutError):
         await query.message.reply_text("❌ Timeout!")
         await show_auto_settings(client, query)
 
@@ -546,7 +557,7 @@ async def handle_replace_words_input(client, query):
         
         await show_auto_settings(client, query)
         
-    except ListenerTimeout:
+    except (ListenerTimeout, asyncio.TimeoutError):
         await query.message.reply_text("❌ Timeout!")
         await show_auto_settings(client, query)
 
