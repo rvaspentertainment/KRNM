@@ -146,6 +146,14 @@ async def generate_string_session(client, message: Message):
         await message.reply_text(f"❌ Error: {str(e)}\n\nPlease try again with /string")
 
 
+# ============ CANCEL COMMAND ============
+
+@Client.on_message(filters.private & filters.command("cancel"))
+async def cancel_command(client, message):
+    """Cancel command - stops any ongoing operation"""
+    await message.reply_text("✅ Send /start to use the bot")
+
+
 # ============ START COMMAND ============
 
 @Client.on_message(filters.private & filters.command("start"))
@@ -192,19 +200,7 @@ async def cb_handler(client, query: CallbackQuery):
                     ]])
             )
         
-        elif data == "clear_replace_words":
-            await db.set_replace_words(user_id, {})
-            await query.answer("✅ Replace Words Cleared", show_alert=True)
-        
-        await show_auto_settings(client, query)
-    except Exception as e:
-        print(f"Error in clear: {e}")
-
-
-@Client.on_message(filters.private & filters.command("cancel"))
-async def cancel_command(client, message):
-    """Cancel command - stops any ongoing operation"""
-    await message.reply_text("✅ Send /start to use the bot") "settings":
+        elif data == "settings":
             await query.message.edit_text(
                 text=Txt.SETTINGS_TXT.format(client.mention),
                 disable_web_page_preview=True,
@@ -339,6 +335,8 @@ async def cancel_command(client, message):
         except:
             pass
 
+
+# ============ HELPER FUNCTIONS ============
 
 async def show_upload_settings(client, query):
     """Show upload settings page"""
@@ -567,4 +565,10 @@ async def handle_clear(client, query, data):
         elif data == "clear_remove_words":
             await db.set_remove_words(user_id, [])
             await query.answer("✅ Remove Words Cleared", show_alert=True)
-        elif data ==
+        elif data == "clear_replace_words":
+            await db.set_replace_words(user_id, {})
+            await query.answer("✅ Replace Words Cleared", show_alert=True)
+        
+        await show_auto_settings(client, query)
+    except Exception as e:
+        print(f"Error in clear: {e}")
