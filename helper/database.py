@@ -16,21 +16,10 @@ class Database:
             caption=None,
             rename_mode='manual',  # 'manual' or 'auto'
             upload_channel=None,  # Channel ID for uploads
-            always_ask=True,  # Always ask before renaming
             upload_as='document',  # 'document', 'video', or 'audio'
-            # Auto detection settings
-            auto_detect_type=True,
-            auto_detect_language=True,
-            auto_detect_year=True,
-            auto_detect_quality=True,
-            auto_detect_source=True,
-            auto_detect_ott=True,
-            auto_detect_encoding=True,
-            auto_detect_audio=True,
             # Customization settings
             remove_words=[],
             replace_words={},
-            quality_format='keep',  # 'keep', 'remove', or specific like '1080p'
             prefix='',
             suffix='',
             auto_clean=True
@@ -134,20 +123,6 @@ class Database:
             print(f"Error getting upload channel: {e}")
             return None
 
-    async def set_always_ask(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'always_ask': value}})
-        except Exception as e:
-            print(f"Error setting always ask: {e}")
-
-    async def get_always_ask(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('always_ask', True) if user else True
-        except Exception as e:
-            print(f"Error getting always ask: {e}")
-            return True
-
     async def set_upload_as(self, id, upload_type):
         try:
             await self.col.update_one({'_id': int(id)}, {'$set': {'upload_as': upload_type}})
@@ -161,111 +136,6 @@ class Database:
         except Exception as e:
             print(f"Error getting upload type: {e}")
             return 'document'
-
-    # Auto detection settings
-    async def set_auto_detect_type(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'auto_detect_type': value}})
-        except Exception as e:
-            print(f"Error setting auto detect type: {e}")
-
-    async def get_auto_detect_type(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('auto_detect_type', True) if user else True
-        except Exception as e:
-            return True
-
-    async def set_auto_detect_language(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'auto_detect_language': value}})
-        except Exception as e:
-            print(f"Error setting auto detect language: {e}")
-
-    async def get_auto_detect_language(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('auto_detect_language', True) if user else True
-        except Exception as e:
-            return True
-
-    async def set_auto_detect_year(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'auto_detect_year': value}})
-        except Exception as e:
-            print(f"Error setting auto detect year: {e}")
-
-    async def get_auto_detect_year(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('auto_detect_year', True) if user else True
-        except Exception as e:
-            return True
-
-    async def set_auto_detect_quality(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'auto_detect_quality': value}})
-        except Exception as e:
-            print(f"Error setting auto detect quality: {e}")
-
-    async def get_auto_detect_quality(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('auto_detect_quality', True) if user else True
-        except Exception as e:
-            return True
-
-    async def set_auto_detect_source(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'auto_detect_source': value}})
-        except Exception as e:
-            print(f"Error setting auto detect source: {e}")
-
-    async def get_auto_detect_source(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('auto_detect_source', True) if user else True
-        except Exception as e:
-            return True
-
-    async def set_auto_detect_ott(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'auto_detect_ott': value}})
-        except Exception as e:
-            print(f"Error setting auto detect OTT: {e}")
-
-    async def get_auto_detect_ott(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('auto_detect_ott', True) if user else True
-        except Exception as e:
-            return True
-
-    async def set_auto_detect_encoding(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'auto_detect_encoding': value}})
-        except Exception as e:
-            print(f"Error setting auto detect encoding: {e}")
-
-    async def get_auto_detect_encoding(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('auto_detect_encoding', True) if user else True
-        except Exception as e:
-            return True
-
-    async def set_auto_detect_audio(self, id, value):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'auto_detect_audio': value}})
-        except Exception as e:
-            print(f"Error setting auto detect audio: {e}")
-
-    async def get_auto_detect_audio(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('auto_detect_audio', True) if user else True
-        except Exception as e:
-            return True
 
     # Customization settings
     async def set_remove_words(self, id, words_list):
@@ -293,19 +163,6 @@ class Database:
             return user.get('replace_words', {}) if user else {}
         except Exception as e:
             return {}
-
-    async def set_quality_format(self, id, quality):
-        try:
-            await self.col.update_one({'_id': int(id)}, {'$set': {'quality_format': quality}})
-        except Exception as e:
-            print(f"Error setting quality format: {e}")
-
-    async def get_quality_format(self, id):
-        try:
-            user = await self.col.find_one({'_id': int(id)})
-            return user.get('quality_format', 'keep') if user else 'keep'
-        except Exception as e:
-            return 'keep'
 
     async def set_prefix(self, id, prefix):
         try:
@@ -354,19 +211,9 @@ class Database:
                 return {
                     'rename_mode': user.get('rename_mode', 'manual'),
                     'upload_channel': user.get('upload_channel', None),
-                    'always_ask': user.get('always_ask', True),
                     'upload_as': user.get('upload_as', 'document'),
-                    'auto_detect_type': user.get('auto_detect_type', True),
-                    'auto_detect_language': user.get('auto_detect_language', True),
-                    'auto_detect_year': user.get('auto_detect_year', True),
-                    'auto_detect_quality': user.get('auto_detect_quality', True),
-                    'auto_detect_source': user.get('auto_detect_source', True),
-                    'auto_detect_ott': user.get('auto_detect_ott', True),
-                    'auto_detect_encoding': user.get('auto_detect_encoding', True),
-                    'auto_detect_audio': user.get('auto_detect_audio', True),
                     'remove_words': user.get('remove_words', []),
                     'replace_words': user.get('replace_words', {}),
-                    'quality_format': user.get('quality_format', 'keep'),
                     'prefix': user.get('prefix', ''),
                     'suffix': user.get('suffix', ''),
                     'auto_clean': user.get('auto_clean', True)
