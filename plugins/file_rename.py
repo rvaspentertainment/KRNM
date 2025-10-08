@@ -13,8 +13,18 @@ from bot import bot, premium_client
 
 from asyncio import sleep, Queue, create_task
 from PIL import Image
-import os, time, re, requests, traceback
+import os, time, re, requests, traceback, asyncio
 from io import BytesIO
+
+
+# Safe progress wrapper
+async def safe_progress(current, total, message, text, start_time):
+    """Wrapper for progress that catches exceptions"""
+    try:
+        await progress_for_pyrogram(current, total, message, text, start_time)
+    except Exception as e:
+        print(f"Progress callback error (non-fatal): {e}")
+        # Continue download despite progress error
 
 # File processing queue for handling multiple files
 user_queues = {}
@@ -276,17 +286,55 @@ async def handle_jai_bajarangabali(client, message, file, filename):
             # Get absolute path
             abs_file_path = os.path.abspath(file_path)
             print(f"Attempting download to: {abs_file_path}")
+            print(f"File size to download: {humanbytes(file.file_size)}")
             
-            path = await upload_client.download_media(
-                message=message, 
-                file_name=abs_file_path, 
-                progress=progress_for_pyrogram, 
-                progress_args=("📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ....", ms, time.time())
-            )
+            # Verify message has media
+            if not message.media:
+                raise Exception("Message has no media to download")
             
-            print(f"Pyrogram returned path: {path}")
+            # Attempt download with timeout handling
+            path = None
+            download_attempts = 0
+            max_attempts = 2
             
-            # Check both returned path and expected path
+            while download_attempts < max_attempts and not path:
+                download_attempts += 1
+                print(f"Download attempt {download_attempts}/{max_attempts}")
+                
+                try:
+                    # Try with progress first
+                    if download_attempts == 1:
+                        path = await upload_client.download_media(
+                            message=message, 
+                            file_name=abs_file_path, 
+                            progress=safe_progress, 
+                            progress_args=(ms, "📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ....", time.time())
+                        )
+                    else:
+                        # Try without progress callback on retry
+                        print("Retrying without progress callback...")
+                        await ms.edit("📥 Rᴇᴛʀyɪɴɢ Dᴏᴡɴʟᴏᴀᴅ...")
+                        path = await upload_client.download_media(
+                            message=message, 
+                            file_name=abs_file_path
+                        )
+                    print(f"Download attempt {download_attempts} - Pyrogram returned: {path}")
+                except Exception as dl_error:
+                    print(f"Download attempt {download_attempts} failed: {dl_error}")
+                    if download_attempts >= max_attempts:
+                        raise
+                    await sleep(2)
+            
+            # Check if download actually happened
+            if path is None:
+                # Check if file exists despite None return
+                if os.path.exists(abs_file_path):
+                    print(f"File exists despite None return: {abs_file_path}")
+                    path = abs_file_path
+                else:
+                    raise Exception("Pyrogram download_media returned None - download failed silently. Check bot permissions and file accessibility.")
+            
+            # Verify file exists
             actual_path = path if path else abs_file_path
             
             if not os.path.exists(actual_path):
@@ -294,6 +342,15 @@ async def handle_jai_bajarangabali(client, message, file, filename):
                 if os.path.exists("downloads"):
                     files = os.listdir("downloads")
                     print(f"Files in downloads/: {files}")
+                    
+                    # Check if file was downloaded with different name
+                    if files:
+                        print(f"Found {len(files)} file(s) in downloads/")
+                        for f in files:
+                            full_path = os.path.join("downloads", f)
+                            fsize = os.path.getsize(full_path)
+                            print(f"  - {f} ({humanbytes(fsize)})")
+                    
                     raise Exception(f"File not found at expected path: {actual_path}")
                 else:
                     raise Exception("Downloads directory doesn't exist")
@@ -518,17 +575,55 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
             # Get absolute path
             abs_file_path = os.path.abspath(file_path)
             print(f"Attempting download to: {abs_file_path}")
+            print(f"File size to download: {humanbytes(file.file_size)}")
             
-            path = await upload_client.download_media(
-                message=file_message, 
-                file_name=abs_file_path, 
-                progress=progress_for_pyrogram,
-                progress_args=("📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ....", ms, time.time())
-            )
+            # Verify message has media
+            if not file_message.media:
+                raise Exception("Message has no media to download")
             
-            print(f"Pyrogram returned path: {path}")
+            # Attempt download with timeout handling
+            path = None
+            download_attempts = 0
+            max_attempts = 2
             
-            # Check both returned path and expected path
+            while download_attempts < max_attempts and not path:
+                download_attempts += 1
+                print(f"Download attempt {download_attempts}/{max_attempts}")
+                
+                try:
+                    # Try with progress first
+                    if download_attempts == 1:
+                        path = await upload_client.download_media(
+                            message=file_message, 
+                            file_name=abs_file_path, 
+                            progress=safe_progress,
+                            progress_args=(ms, "📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ....", time.time())
+                        )
+                    else:
+                        # Try without progress callback on retry
+                        print("Retrying without progress callback...")
+                        await ms.edit("📥 Rᴇᴛʀyɪɴɢ Dᴏᴡɴʟᴏᴀᴅ...")
+                        path = await upload_client.download_media(
+                            message=file_message, 
+                            file_name=abs_file_path
+                        )
+                    print(f"Download attempt {download_attempts} - Pyrogram returned: {path}")
+                except Exception as dl_error:
+                    print(f"Download attempt {download_attempts} failed: {dl_error}")
+                    if download_attempts >= max_attempts:
+                        raise
+                    await sleep(2)
+            
+            # Check if download actually happened
+            if path is None:
+                # Check if file exists despite None return
+                if os.path.exists(abs_file_path):
+                    print(f"File exists despite None return: {abs_file_path}")
+                    path = abs_file_path
+                else:
+                    raise Exception("Pyrogram download_media returned None - download failed silently. Check bot permissions and file accessibility.")
+            
+            # Verify file exists
             actual_path = path if path else abs_file_path
             
             if not os.path.exists(actual_path):
@@ -536,6 +631,15 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
                 if os.path.exists("downloads"):
                     files = os.listdir("downloads")
                     print(f"Files in downloads/: {files}")
+                    
+                    # Check if file was downloaded with different name
+                    if files:
+                        print(f"Found {len(files)} file(s) in downloads/")
+                        for f in files:
+                            full_path = os.path.join("downloads", f)
+                            fsize = os.path.getsize(full_path)
+                            print(f"  - {f} ({humanbytes(fsize)})")
+                    
                     raise Exception(f"File not found at expected path: {actual_path}")
                 else:
                     raise Exception("Downloads directory doesn't exist")
