@@ -16,3 +16,4 @@ youtube-dl
 requests
 wget
 ffmpeg-python>=0.2.0
+hachoir
