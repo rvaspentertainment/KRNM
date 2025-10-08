@@ -26,7 +26,6 @@ class Config(object):
     WEBHOOK = bool(os.environ.get("WEBHOOK", "True"))
 
 
-
 class Txt(object):
     # part of text configuration
     START_TXT = """<b>Hᴀɪ {} 👋,
@@ -41,7 +40,7 @@ Aɴᴅ Rᴇɴᴀᴍᴇ Wɪᴛʜᴏᴜᴛ Dᴏᴡɴʟᴏᴀᴅ 💯 Fᴜʟʟʏ W�
 ├📕 Lɪʙʀᴀʀy : <a href=https://github.com/Kushalhk>CLICK HERE</a>
 ├✏️ Lᴀɴɢᴜᴀɢᴇ: <a href=https://www.python.org>Pyᴛʜᴏɴ 3</a>
 ├💾 Dᴀᴛᴀ Bᴀꜱᴇ: <a href=https://cloud.mongodb.com>Mᴏɴɢᴏ DB</a>
-├📊 Bᴜɪʟᴅ Vᴇʀꜱɪᴏɴ: Rᴇɴᴀᴍᴇʀ V3.0.0</a></b>     
+├📊 Bᴜɪʟᴅ Vᴇʀꜱɪᴏɴ: Rᴇɴᴀᴍᴇʀ V4.0.0</a></b>     
 ╰───────────────⍟ """
 
     HELP_TXT = """
@@ -50,14 +49,13 @@ Aɴᴅ Rᴇɴᴀᴍᴇ Wɪᴛʜᴏᴜᴛ Dᴏᴡɴʟᴏᴀᴅ 💯 Fᴜʟʟʏ W�
 ɪ ᴄᴀɴ ʀᴇɴᴀᴍᴇ ᴍᴇᴅɪᴀ ᴡɪᴛʜᴏᴜᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ɪᴛ!
 sᴘᴇᴇᴅ ᴅᴇᴘᴇɴᴅs ᴏɴ ʏᴏᴜʀ ᴍᴇᴅɪᴀ ᴅᴄ.
 
-ɪᴜsᴛ sᴇɴᴅ ᴍᴇ ᴍᴇᴅɪᴀ ᴛᴏ ʀᴇɴᴀᴍᴇ
+ᴊᴜsᴛ sᴇɴᴅ ᴍᴇ ᴍᴇᴅɪᴀ ᴛᴏ ʀᴇɴᴀᴍᴇ
 sᴇɴᴅ ɪᴍᴀɢᴇ ᴛᴏ sᴇᴛ ᴛʜᴜᴍʙɴᴀɪʟ 
 ᴛᴏ sᴇᴇ ᴄᴜsᴛᴏᴍ ᴛʜᴜᴍʙɴᴀɪʟ ᴘʀᴇss
 
 ℹ️ 𝗔𝗻𝘆 𝗢𝘁𝗵𝗲𝗿 𝗛𝗲𝗹𝗽 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 :- <a href=https://t.me/TG_SUPPORT_GROUP>𝑺𝑼𝑷𝑷𝑶𝑹𝑻 𝑮𝑹𝑶𝑼𝑷</a>
 """
 
-#⚠️ Dᴏɴ'ᴛ Rᴇᴍᴏᴠᴇ Oᴜʀ Cʀᴇᴅɪᴛꜱ @ᴩyʀᴏ_ʙᴏᴛᴢ🙏🥲
     DEV_TXT = """<b><u>𝕁𝕆𝕀ℕ 𝕆𝕌ℝ 𝔾ℝ𝕆ℙ𝕊 𝔸ℕ𝔻 ℂℍ𝔸ℕℕ𝔼𝕃</b></u>
 » 𝗠𝗢𝗩𝗜𝗘𝗦 𝗖𝗛𝗔𝗡𝗡𝗘𝗟 : <a href=https://telegram.me/TG_LINKS_CHANNEL2>CLICK HERE</a>
 » 𝗥𝗘𝗤𝗨𝗘𝗦𝗧 𝗚𝗥𝗢𝗨𝗣 : <a href=https://telegram.me/movies_hub_official2>CLICK HERE</a> """
@@ -82,9 +80,9 @@ sᴇɴᴅ ɪᴍᴀɢᴇ ᴛᴏ sᴇᴛ ᴛʜᴜᴍʙɴᴀɪʟ
 
 ᴇɢ:- 
 
-<b>{file_name}</b>
+<b>{filename}</b>
 
-File Size: <b>{file_size}</b>
+File Size: <b>{filesize}</b>
 
 Join us :- @TG_UPDATES1 </b>"""
 
@@ -92,70 +90,3 @@ Join us :- @TG_UPDATES1 </b>"""
  /del_thumb Uꜱᴇ Tʜɪꜱ Cᴏᴍᴍᴀɴᴅ Tᴏ Dᴇʟᴇᴛᴇ Yᴏᴜʀ Oʟᴅ Tʜᴜᴍʙɴɪʟᴇ.
  /view_thumb Uꜱᴇ Tʜɪꜱ Cᴏᴍᴍᴀɴᴅ Tᴏ Vɪᴇᴡ Yᴏᴜʀ Cᴜʀʀᴇɴᴛ Tʜᴜᴍʙɴɪʟᴇ
 </b>"""
-  
-    EXTRA_TXT = """<b>
-    Exᴛʀᴀ Mᴏᴅᴜʟᴇs
-ɴᴏᴛᴇ:
-ᴛʜᴇꜱᴇ ᴀʀᴇ ᴛʜᴇ ᴇxᴛʀᴀ ꜰᴇᴀᴛᴜʀᴇꜱ ᴏꜰ ᴛʜɪꜱ ʙᴏᴛ
-
-𝙲𝙻𝙸𝙲𝙺 𝙱𝙴𝙻𝙾𝚆 𝙱𝚄𝚃𝚃𝙾𝙽𝚂 𝙰𝙽𝙳 𝚄𝚂𝙴 𝙴𝚇𝚃𝚁𝙰 𝙼𝙾𝙳𝚂... 
-𝚂𝚃𝙰𝚈 𝚆𝙸𝚃𝙷 𝚄𝚂 𝙰𝙽𝙳 𝚂𝚄𝙿𝙿𝙾𝚁𝚃 𝚃𝙾 𝙱𝚁𝙸𝙽𝙶 𝙼𝙾𝚁𝙴 𝙵𝙴𝙰𝚃𝚄𝚁𝙴𝚂 𝚁𝙴𝙶𝙰𝚁𝙳𝙸𝙽𝙶 𝚃𝙴𝙻𝙴𝙶𝚁𝙰𝙼 𝙱𝙾𝚃𝚂 🥰
-</b>"""
-
-    MAHAAN_TXT = """<b>
-𝙷𝙴𝚁𝙴 𝚈𝙾𝚄 𝙲𝙰𝙽 𝙳𝙾𝚆𝙽𝙻𝙾𝙰𝙳 𝚂𝙾𝙼𝙴 𝚂𝙾𝙽𝙶𝚂 𝙾𝙵 𝚈𝙾𝚄𝚃𝚄𝙱𝙴. 
-𝙹𝚄𝚂𝚃 𝚈𝙾𝚄 𝙽𝙴𝙴𝙳 𝚃𝙾 𝚂𝙴𝙽𝙳 𝙰 𝙲𝙾𝙼𝙼𝙰𝙽𝙳 𝚃𝙾 𝙼𝙴 /𝚜𝚘𝚗𝚐
-
-𝙴𝚇𝙰𝙼𝙿𝙻𝙴 :- /𝚜𝚘𝚗𝚐 𝚏𝚊𝚍𝚎𝚍
-
-𝙲𝚁𝙴𝙳𝙸𝚃𝚂 @TG_UPDATED1
-
-𝚃𝙷𝙰𝙽𝙺 𝚈𝙾𝚄 🫶</b>"""
-
-    LYRICS_TXT = """<b> 
-𝙷𝙴𝚁𝙴 𝚈𝙾𝚄 𝙲𝙰𝙽 𝙶𝙴𝚃 𝙰 𝙻𝚈𝚁𝙸𝙲𝚂 𝙹𝚄𝚂𝚃 𝚈𝙾𝚄 𝙽𝙴𝙴𝙳 𝚃𝙾 𝚁𝙴𝙿𝙻𝚈 𝚃𝙾 𝙰 𝚂𝙿𝙴𝙲𝙸𝙵𝙸𝙲 𝙵𝙸𝙻𝙴 𝚃𝙾 𝙶𝙴𝚃 𝙻𝚈𝚁𝙸𝙲𝚂 
-
-𝙲𝙾𝙼𝙼𝙰𝙽𝙳 /𝚕𝚢𝚛𝚒𝚌𝚜 
-
-𝙲𝚁𝙴𝙳𝙸𝚃𝚂 :- 
-@TG_UPDATES1
-
-𝚃𝙷𝙰𝙽𝙺 𝚈𝙾𝚄 𝙰𝙻𝙻 🫶</b>"""
-    
-    AUTO_SETTINGS_TXT = """**⚙️ Auto Rename Settings**
-
-**Detection Settings:**
-├ Media Type: {detect_type}
-├ Language: {detect_lang}
-├ Year: {detect_year}
-├ Quality: {detect_quality}
-├ Source: {detect_source}
-├ OTT Platform: {detect_ott}
-├ Encoding: {detect_encoding}
-└ Audio Format: {detect_audio}
-
-**Quality:** {quality}
-**Auto Clean:** {auto_clean}
-
-**Customization:**
-├ Prefix: `{prefix}`
-├ Suffix: `{suffix}`
-├ Remove Words: `{remove_words}`
-└ Replace Words: `{replace_words}`"""
-    
-    RENAME_MODE_TXT = """**🔧 Rename Mode Settings**
-
-**Current Mode:** {mode}
-
-**📝 Manual Mode:**
-• You will be asked to enter a new name for each file
-
-**🤖 Auto Mode:**
-• Automatically detects and cleans filenames
-• Removes unwanted words
-• Detects language, quality, media type, etc.
-• Applies custom rules
-
-Choose your preferred mode:"""
-
-
