@@ -11,35 +11,35 @@ COMMON_JUNK_WORDS = [
 
 
 def clean_filename(filename, remove_words=None, replace_words=None, auto_clean=True):
-    """Clean filename by removing/replacing words and unwanted characters"""
+    """Clean filename - CUSTOM WORDS FIRST, THEN JUNK"""
     try:
         name = filename
         
-        # Auto clean common junk
-        if auto_clean:
-            for junk in COMMON_JUNK_WORDS:
-                name = re.sub(rf'\b{junk}\b', '', name, flags=re.IGNORECASE)
-        
-        # Remove custom words
+        # STEP 1: Remove custom words FIRST
         if remove_words:
             for word in remove_words:
                 if word:
                     name = re.sub(rf'\b{re.escape(word)}\b', '', name, flags=re.IGNORECASE)
         
-        # Replace custom words
+        # STEP 2: Replace custom words
         if replace_words:
             for old_word, new_word in replace_words.items():
                 if old_word and new_word:
                     name = re.sub(rf'\b{re.escape(old_word)}\b', new_word, name, flags=re.IGNORECASE)
         
-        # Remove unwanted special characters
+        # STEP 3: Auto clean common junk (AFTER custom words)
+        if auto_clean:
+            for junk in COMMON_JUNK_WORDS:
+                name = re.sub(rf'\b{junk}\b', '', name, flags=re.IGNORECASE)
+        
+        # STEP 4: Remove unwanted special characters
         name = re.sub(r'[#@\[\]\{\}]', '', name)
         
-        # Remove brackets and their contents
+        # STEP 5: Remove brackets and their contents
         name = re.sub(r'\[.*?\]', '', name)
         name = re.sub(r'\(.*?\)', '', name)
         
-        # Clean up separators
+        # STEP 6: Clean up separators
         name = re.sub(r'[._-]+', ' ', name)
         name = re.sub(r'\s+', ' ', name)
         
@@ -50,7 +50,7 @@ def clean_filename(filename, remove_words=None, replace_words=None, auto_clean=T
 
 
 async def auto_rename_file(filename, settings):
-    """Main function to auto-rename file based on settings - SIMPLIFIED VERSION"""
+    """Main function to auto-rename file based on settings"""
     try:
         # Get extension
         if '.' in filename:
@@ -59,7 +59,7 @@ async def auto_rename_file(filename, settings):
             name = filename
             ext = 'mkv'  # default
         
-        # Clean filename (remove/replace words only)
+        # Clean filename (custom remove/replace FIRST, then junk removal)
         clean_name = clean_filename(
             name,
             remove_words=settings.get('remove_words', []),
