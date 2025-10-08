@@ -119,15 +119,28 @@ def get_disk_space():
 
 async def download_file_safe(client, message, file_path, ms=None):
     """
-    Safe file download with multiple fallback strategies
+    Safe file download with multiple fallback strategies + debug logging.
     Returns: (success: bool, actual_path: str, error_msg: str)
     """
+    import traceback
+    import os, time
+
     try:
-        # Ensure directory exists
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        
-        # Strategy 1: Direct download with progress
-        print(f"[Strategy 1] Attempting direct download to: {file_path}")
+
+        # 🧪 Debug info
+        print("\n========== [DOWNLOAD DEBUG] ==========")
+        print(f"[DEBUG] file_path: {file_path}")
+        print(f"[DEBUG] message.media: {message.media}")
+        try:
+            file_obj = getattr(message, message.media.value)
+            print(f"[DEBUG] file_name from message: {file_obj.file_name}")
+            print(f"[DEBUG] file_size: {file_obj.file_size}")
+        except Exception as e:
+            print(f"[DEBUG] Could not read file info: {e}")
+
+        # ✅ Strategy 1: Normal download with progress
+        print("\n[Strategy 1] Direct download with progress...")
         try:
             path = await client.download_media(
                 message=message,
@@ -135,69 +148,64 @@ async def download_file_safe(client, message, file_path, ms=None):
                 progress=safe_progress,
                 progress_args=(ms, "📥 Downloading....", time.time()) if ms else None
             )
-            
             if path and os.path.exists(path):
                 print(f"✅ Strategy 1 success: {path}")
                 return True, path, None
         except Exception as e:
-            print(f"Strategy 1 failed: {e}")
-        
-        # Strategy 2: Download without progress callback
-        print(f"[Strategy 2] Retrying without progress...")
+            print(f"❌ Strategy 1 failed: {e}\n{traceback.format_exc()}")
+
+        # ✅ Strategy 2: Download without progress
+        print("\n[Strategy 2] Download without progress...")
         if ms:
             await ms.edit("📥 Retrying download...")
-        
         try:
             path = await client.download_media(
                 message=message,
                 file_name=file_path
             )
-            
             if path and os.path.exists(path):
                 print(f"✅ Strategy 2 success: {path}")
                 return True, path, None
         except Exception as e:
-            print(f"Strategy 2 failed: {e}")
-        
-        # Strategy 3: Download to downloads/ directory only (let Pyrogram choose name)
-        print(f"[Strategy 3] Auto-naming download...")
+            print(f"❌ Strategy 2 failed: {e}\n{traceback.format_exc()}")
+
+        # ✅ Strategy 3: Let Pyrogram choose the filename (downloads/auto)
+        print("\n[Strategy 3] Auto-naming download...")
         try:
             downloads_dir = os.path.dirname(file_path)
             path = await client.download_media(
                 message=message,
                 file_name=downloads_dir + "/"
             )
-            
             if path and os.path.exists(path):
                 print(f"✅ Strategy 3 success: {path}")
-                # Rename to desired filename
                 try:
                     os.rename(path, file_path)
                     return True, file_path, None
                 except:
                     return True, path, None
         except Exception as e:
-            print(f"Strategy 3 failed: {e}")
-        
-        # Strategy 4: Check if file somehow exists
-        if os.path.exists(file_path):
-            print(f"✅ Strategy 4: File exists at {file_path}")
-            return True, file_path, None
-        
-        # All strategies failed
-        error_msg = "All download strategies failed. Possible causes:\n"
-        error_msg += "• Bot lacks permission to access the file\n"
-        error_msg += "• File was deleted from Telegram\n"
-        error_msg += "• Network/connection issues\n"
-        error_msg += "• Insufficient storage space"
-        
-        return False, None, error_msg
-    
-    except Exception as e:
-        error_trace = traceback.format_exc()
-        print(f"Critical download error: {e}\n{error_trace}")
-        return False, None, str(e)
+            print(f"❌ Strategy 3 failed: {e}\n{traceback.format_exc()}")
 
+        # ✅ Strategy 4: Maybe file already exists
+        if os.path.exists(file_path):
+            print(f"✅ Strategy 4: File already exists at {file_path}")
+            return True, file_path, None
+
+        # ❌ All strategies failed
+        error_msg = (
+            "All download strategies failed. Possible causes:\n"
+            "• Bot lacks permission to access the file\n"
+            "• File was deleted from Telegram\n"
+            "• Network/connection issues\n"
+            "• Insufficient storage space"
+        )
+        print("❌ All strategies failed")
+        return False, None, error_msg
+
+    except Exception as e:
+        print(f"🚨 Critical download error: {e}\n{traceback.format_exc()}")
+        return False, None, str(e)
 
 @Client.on_message(filters.private & (filters.document | filters.audio | filters.video))
 async def rename_start(client, message):
