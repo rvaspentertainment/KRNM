@@ -3,8 +3,8 @@ from pyrogram.enums import MessageMediaType
 from pyrogram.errors import FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 
-from hachior.metadata import extractMetadata
-from hachior.parser import createParser
+from hachoir.metadata import extractMetadata
+from hachoir.parser import createParser
 
 from helper.utils import progress_for_pyrogram, convert, humanbytes
 from helper.database import db
