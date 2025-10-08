@@ -249,13 +249,22 @@ async def handle_jai_bajarangabali(client, message, file, filename):
         episode_number = extract_episode_number(filename)
         upload_client = premium_client if premium_client else client
         
+        # Get current working directory
+        cwd = os.getcwd()
+        print(f"Current working directory: {cwd}")
+        
         # Sanitize filename for download
         safe_filename = sanitize_filename(new_name)
-        file_path = f"downloads/{safe_filename}"
-        thumb_path = f"downloads/thumb_{episode_number}.jpg"
+        
+        # Use absolute paths
+        downloads_dir = os.path.join(cwd, "downloads")
+        file_path = os.path.join(downloads_dir, safe_filename)
+        thumb_path = os.path.join(downloads_dir, f"thumb_{episode_number}.jpg")
         
         # Ensure downloads directory exists with proper permissions
-        os.makedirs("downloads", exist_ok=True)
+        os.makedirs(downloads_dir, exist_ok=True)
+        print(f"Downloads directory: {downloads_dir}")
+        print(f"File will be saved as: {file_path}")
         
         status_text = "🔄 Aᴜᴛᴏ-Pʀᴏᴄᴇssɪɴɢ Jᴀɪ Bᴀᴊᴀʀᴀɴɢᴀʙᴀʟɪ...\n📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ..."
         if premium_client:
@@ -264,16 +273,33 @@ async def handle_jai_bajarangabali(client, message, file, filename):
         
         # Download with error handling
         try:
+            # Get absolute path
+            abs_file_path = os.path.abspath(file_path)
+            print(f"Attempting download to: {abs_file_path}")
+            
             path = await upload_client.download_media(
                 message=message, 
-                file_name=file_path, 
+                file_name=abs_file_path, 
                 progress=progress_for_pyrogram, 
                 progress_args=("📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ....", ms, time.time())
             )
             
-            # Verify download
-            if not path or not os.path.exists(file_path):
-                raise Exception("Download completed but file not found on disk")
+            print(f"Pyrogram returned path: {path}")
+            
+            # Check both returned path and expected path
+            actual_path = path if path else abs_file_path
+            
+            if not os.path.exists(actual_path):
+                # Try to find file in downloads directory
+                if os.path.exists("downloads"):
+                    files = os.listdir("downloads")
+                    print(f"Files in downloads/: {files}")
+                    raise Exception(f"File not found at expected path: {actual_path}")
+                else:
+                    raise Exception("Downloads directory doesn't exist")
+            
+            # Update file_path to actual location
+            file_path = actual_path
             
             file_size = os.path.getsize(file_path)
             if file_size == 0:
@@ -287,10 +313,16 @@ async def handle_jai_bajarangabali(client, message, file, filename):
             # Retry download
             path = await upload_client.download_media(
                 message=message, 
-                file_name=file_path, 
+                file_name=abs_file_path, 
                 progress=progress_for_pyrogram, 
                 progress_args=("📥 Rᴇᴛʀyɪɴɢ Dᴏᴡɴʟᴏᴀᴅ....", ms, time.time())
             )
+            
+            # Re-verify after retry
+            actual_path = path if path else abs_file_path
+            if not os.path.exists(actual_path):
+                raise Exception("Retry failed - file still not found")
+            file_path = actual_path
         except Exception as e:
             error_msg = str(e)
             error_trace = traceback.format_exc()
@@ -447,15 +479,24 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
     try:
         upload_client = premium_client if premium_client else client
         
+        # Get current working directory
+        cwd = os.getcwd()
+        print(f"Current working directory: {cwd}")
+        
         # Sanitize filename for file system
         safe_filename = sanitize_filename(new_filename)
-        file_path = f"downloads/{safe_filename}"
+        
+        # Use absolute path
+        downloads_dir = os.path.join(cwd, "downloads")
+        file_path = os.path.join(downloads_dir, safe_filename)
         
         # Beautify filename for display in caption
         display_filename = beautify_filename(new_filename)
         
         # Ensure downloads directory exists with proper permissions
-        os.makedirs("downloads", exist_ok=True)
+        os.makedirs(downloads_dir, exist_ok=True)
+        print(f"Downloads directory: {downloads_dir}")
+        print(f"File will be saved as: {file_path}")
         
         # Check available disk space before download
         free_space = get_disk_space()
@@ -474,16 +515,33 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
         
         # Download with error handling
         try:
+            # Get absolute path
+            abs_file_path = os.path.abspath(file_path)
+            print(f"Attempting download to: {abs_file_path}")
+            
             path = await upload_client.download_media(
                 message=file_message, 
-                file_name=file_path, 
+                file_name=abs_file_path, 
                 progress=progress_for_pyrogram,
                 progress_args=("📥 Dᴏᴡɴʟᴏᴀᴅɪɴɢ....", ms, time.time())
             )
             
-            # Verify download
-            if not path or not os.path.exists(file_path):
-                raise Exception("Download completed but file not found on disk")
+            print(f"Pyrogram returned path: {path}")
+            
+            # Check both returned path and expected path
+            actual_path = path if path else abs_file_path
+            
+            if not os.path.exists(actual_path):
+                # Try to find file in downloads directory
+                if os.path.exists("downloads"):
+                    files = os.listdir("downloads")
+                    print(f"Files in downloads/: {files}")
+                    raise Exception(f"File not found at expected path: {actual_path}")
+                else:
+                    raise Exception("Downloads directory doesn't exist")
+            
+            # Update file_path to actual location
+            file_path = actual_path
             
             file_size = os.path.getsize(file_path)
             if file_size == 0:
@@ -497,10 +555,16 @@ async def start_upload_process(client, file_message, new_filename, file, user_id
             # Retry download
             path = await upload_client.download_media(
                 message=file_message, 
-                file_name=file_path, 
+                file_name=abs_file_path, 
                 progress=progress_for_pyrogram,
                 progress_args=("📥 Rᴇᴛʀyɪɴɢ Dᴏᴡɴʟᴏᴀᴅ....", ms, time.time())
             )
+            
+            # Re-verify after retry
+            actual_path = path if path else abs_file_path
+            if not os.path.exists(actual_path):
+                raise Exception("Retry failed - file still not found")
+            file_path = actual_path
         except Exception as e:
             error_msg = str(e)
             error_trace = traceback.format_exc()
