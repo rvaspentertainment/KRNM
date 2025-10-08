@@ -18,9 +18,12 @@ except ImportError:
 
 # ============ STRING SESSION GENERATOR ============
 
+# ============ STRING SESSION GENERATOR (FIXED) ============
+
 @Client.on_message(filters.private & filters.command("string"))
 async def generate_string_session(client, message: Message):
     user_id = message.from_user.id
+    temp_client = None  # Initialize outside try block
     
     try:
         # Step 1: Get API_ID
@@ -71,14 +74,18 @@ async def generate_string_session(client, message: Message):
         # Connect and send OTP
         try:
             from pyrogram import Client as PyroClient
+            
+            # FIXED: Use unique session name
             temp_client = PyroClient(
-                name=f"session_{user_id}",
+                name=f"temp_session_{user_id}",
                 api_id=api_id,
                 api_hash=api_hash,
                 in_memory=True
             )
             
             await temp_client.connect()
+            
+            # Send OTP
             code = await temp_client.send_code(phone)
             phone_code_hash = code.phone_code_hash
             
@@ -95,19 +102,31 @@ async def generate_string_session(client, message: Message):
                 await temp_client.disconnect()
                 return await otp_msg.reply_text("✅ Operation cancelled.")
             
-            otp = otp_msg.text.replace(" ", "")
+            otp = otp_msg.text.replace(" ", "").strip()
             
             # Try to sign in
             try:
-                await temp_client.sign_in(phone, phone_code_hash, otp)
+                # FIXED: Wait for sign in to complete
+                signed_in = await temp_client.sign_in(phone, phone_code_hash, otp)
+                
+                # CRITICAL FIX: Add small delay before exporting
+                await asyncio.sleep(1)
+                
+                # Export session string
                 string_session = await temp_client.export_session_string()
                 
-                await otp_msg.reply_text(
-                    "✅ <b>String Session Generated Successfully!</b>\n\n"
-                    f"<code>{string_session}</code>\n\n"
-                    "⚠️ <b>Keep this safe and never share it with anyone!</b>",
-                    disable_web_page_preview=True
-                )
+                # Verify session string length
+                if len(string_session) < 300:  # Basic validation
+                    await otp_msg.reply_text(
+                        "⚠️ Session generated but seems incomplete. Please try again.",
+                    )
+                else:
+                    await otp_msg.reply_text(
+                        "✅ <b>String Session Generated Successfully!</b>\n\n"
+                        f"<code>{string_session}</code>\n\n"
+                        "⚠️ <b>Keep this safe and never share it with anyone!</b>",
+                        disable_web_page_preview=True
+                    )
                 
                 await temp_client.disconnect()
                 
@@ -124,15 +143,27 @@ async def generate_string_session(client, message: Message):
                     return await password_msg.reply_text("✅ Operation cancelled.")
                 
                 try:
+                    # Check password
                     await temp_client.check_password(password_msg.text)
+                    
+                    # CRITICAL FIX: Add delay before exporting
+                    await asyncio.sleep(1)
+                    
+                    # Export session string
                     string_session = await temp_client.export_session_string()
                     
-                    await password_msg.reply_text(
-                        "✅ <b>String Session Generated Successfully!</b>\n\n"
-                        f"<code>{string_session}</code>\n\n"
-                        "⚠️ <b>Keep this safe and never share it with anyone!</b>",
-                        disable_web_page_preview=True
-                    )
+                    # Verify session string
+                    if len(string_session) < 300:
+                        await password_msg.reply_text(
+                            "⚠️ Session generated but seems incomplete. Please try again.",
+                        )
+                    else:
+                        await password_msg.reply_text(
+                            "✅ <b>String Session Generated Successfully!</b>\n\n"
+                            f"<code>{string_session}</code>\n\n"
+                            "⚠️ <b>Keep this safe and never share it with anyone!</b>",
+                            disable_web_page_preview=True
+                        )
                     
                     await temp_client.disconnect()
                     
@@ -141,21 +172,43 @@ async def generate_string_session(client, message: Message):
                     return await password_msg.reply_text("❌ Invalid 2FA password. Please try again with /string")
             
         except ApiIdInvalid:
+            if temp_client:
+                await temp_client.disconnect()
             return await message.reply_text("❌ Invalid API_ID or API_HASH. Please try again with /string")
         except PhoneNumberInvalid:
+            if temp_client:
+                await temp_client.disconnect()
             return await message.reply_text("❌ Invalid phone number. Please try again with /string")
         except PhoneCodeInvalid:
+            if temp_client:
+                await temp_client.disconnect()
             return await message.reply_text("❌ Invalid OTP code. Please try again with /string")
         except PhoneCodeExpired:
+            if temp_client:
+                await temp_client.disconnect()
             return await message.reply_text("❌ OTP has expired. Please try again with /string")
     
     except ListenerTimeout:
+        if temp_client:
+            try:
+                await temp_client.disconnect()
+            except:
+                pass
         await message.reply_text("❌ Timeout! Please try again with /string")
     except asyncio.TimeoutError:
+        if temp_client:
+            try:
+                await temp_client.disconnect()
+            except:
+                pass
         await message.reply_text("❌ Timeout! Please try again with /string")
     except Exception as e:
+        if temp_client:
+            try:
+                await temp_client.disconnect()
+            except:
+                pass
         await message.reply_text(f"❌ Error: {str(e)}\n\nPlease try again with /string")
-
 
 # ============ CANCEL COMMAND ============
 
