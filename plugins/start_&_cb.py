@@ -1,27 +1,11 @@
-import random
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply, CallbackQuery, Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message
 from pyrogram.errors import (
-    MessageNotModified, MessageDeleteForbidden, QueryIdInvalid, UserIsBlocked,
-    ApiIdInvalid, PhoneNumberInvalid, PhoneCodeInvalid, PhoneCodeExpired,
-    SessionPasswordNeeded, PasswordHashInvalid
+    MessageNotModified, ApiIdInvalid, PhoneNumberInvalid, PhoneCodeInvalid, 
+    PhoneCodeExpired, SessionPasswordNeeded, PasswordHashInvalid, ListenerTimeout
 )
 from helper.database import db
 from config import Config, Txt
-import asyncio
-from plugins.settings_handler import user_setting_state
-# Dictionary to store user session generation states and settings input states
-user_states = {}
-
-class SessionState:
-    def __init__(self):
-        self.api_id = None
-        self.api_hash = None
-        self.phone = None
-        self.client = None
-        self.phone_code_hash = None
-        self.step = None
-
 
 # ============ STRING SESSION GENERATOR ============
 
@@ -30,44 +14,136 @@ async def generate_string_session(client, message: Message):
     user_id = message.from_user.id
     
     try:
-        await message.reply_text(
-            "<b>📱 STRING SESSION GENERATOR</b>\n\n"
-            "⚠️ <b>WARNING:</b> Never share your string session with anyone!\n\n"
-            "Please send your <b>API_ID</b>\n\n"
-            "Get it from: https://my.telegram.org",
-            disable_web_page_preview=True
+        # Step 1: Get API_ID
+        api_id_msg = await client.ask(
+            chat_id=user_id,
+            text="<b>📱 STRING SESSION GENERATOR</b>\n\n"
+                 "⚠️ <b>WARNING:</b> Never share your string session with anyone!\n\n"
+                 "Please send your <b>API_ID</b>\n\n"
+                 "Get it from: https://my.telegram.org\n\n"
+                 "Send /cancel to cancel",
+            timeout=300
         )
         
-        user_states[user_id] = SessionState()
-        user_states[user_id].step = "api_id"
+        if api_id_msg.text == "/cancel":
+            return await api_id_msg.reply_text("✅ Operation cancelled.")
         
-    except Exception as e:
-        await message.reply_text(f"❌ Error: {str(e)}")
-
-
-async def cleanup_session(user_id):
-    """Clean up session generation state"""
-    if user_id in user_states:
-        state = user_states[user_id]
+        if not api_id_msg.text.isdigit():
+            return await api_id_msg.reply_text("❌ API_ID must be a number. Please try again with /string")
         
-        if hasattr(state, 'client') and state.client:
+        api_id = int(api_id_msg.text)
+        
+        # Step 2: Get API_HASH
+        api_hash_msg = await client.ask(
+            chat_id=user_id,
+            text="✅ API_ID received!\n\nNow send your <b>API_HASH</b>\n\nSend /cancel to cancel",
+            timeout=300
+        )
+        
+        if api_hash_msg.text == "/cancel":
+            return await api_hash_msg.reply_text("✅ Operation cancelled.")
+        
+        api_hash = api_hash_msg.text.strip()
+        
+        # Step 3: Get Phone Number
+        phone_msg = await client.ask(
+            chat_id=user_id,
+            text="✅ API_HASH received!\n\n"
+                 "Now send your <b>Phone Number</b> with country code\n"
+                 "Example: +1234567890\n\nSend /cancel to cancel",
+            timeout=300
+        )
+        
+        if phone_msg.text == "/cancel":
+            return await phone_msg.reply_text("✅ Operation cancelled.")
+        
+        phone = phone_msg.text.strip()
+        
+        # Connect and send OTP
+        try:
+            from pyrogram import Client as PyroClient
+            temp_client = PyroClient(
+                name=f"session_{user_id}",
+                api_id=api_id,
+                api_hash=api_hash,
+                in_memory=True
+            )
+            
+            await temp_client.connect()
+            code = await temp_client.send_code(phone)
+            phone_code_hash = code.phone_code_hash
+            
+            # Step 4: Get OTP
+            otp_msg = await client.ask(
+                chat_id=user_id,
+                text="✅ OTP sent to your Telegram account!\n\n"
+                     "Please send the <b>OTP code</b> you received.\n"
+                     "Example: 12345\n\nSend /cancel to cancel",
+                timeout=300
+            )
+            
+            if otp_msg.text == "/cancel":
+                await temp_client.disconnect()
+                return await otp_msg.reply_text("✅ Operation cancelled.")
+            
+            otp = otp_msg.text.replace(" ", "")
+            
+            # Try to sign in
             try:
-                await state.client.disconnect()
-            except:
-                pass
-        
-        del user_states[user_id]
-
-
-@Client.on_message(filters.private & filters.command("cancel"))
-async def cancel_operation(client, message: Message):
-    user_id = message.from_user.id
+                await temp_client.sign_in(phone, phone_code_hash, otp)
+                string_session = await temp_client.export_session_string()
+                
+                await otp_msg.reply_text(
+                    "✅ <b>String Session Generated Successfully!</b>\n\n"
+                    f"<code>{string_session}</code>\n\n"
+                    "⚠️ <b>Keep this safe and never share it with anyone!</b>",
+                    disable_web_page_preview=True
+                )
+                
+                await temp_client.disconnect()
+                
+            except SessionPasswordNeeded:
+                # Step 5: Get 2FA Password
+                password_msg = await client.ask(
+                    chat_id=user_id,
+                    text="🔐 Your account has 2FA enabled.\n\nPlease send your <b>2FA Password</b>:\n\nSend /cancel to cancel",
+                    timeout=300
+                )
+                
+                if password_msg.text == "/cancel":
+                    await temp_client.disconnect()
+                    return await password_msg.reply_text("✅ Operation cancelled.")
+                
+                try:
+                    await temp_client.check_password(password_msg.text)
+                    string_session = await temp_client.export_session_string()
+                    
+                    await password_msg.reply_text(
+                        "✅ <b>String Session Generated Successfully!</b>\n\n"
+                        f"<code>{string_session}</code>\n\n"
+                        "⚠️ <b>Keep this safe and never share it with anyone!</b>",
+                        disable_web_page_preview=True
+                    )
+                    
+                    await temp_client.disconnect()
+                    
+                except PasswordHashInvalid:
+                    await temp_client.disconnect()
+                    return await password_msg.reply_text("❌ Invalid 2FA password. Please try again with /string")
+            
+        except ApiIdInvalid:
+            return await message.reply_text("❌ Invalid API_ID or API_HASH. Please try again with /string")
+        except PhoneNumberInvalid:
+            return await message.reply_text("❌ Invalid phone number. Please try again with /string")
+        except PhoneCodeInvalid:
+            return await message.reply_text("❌ Invalid OTP code. Please try again with /string")
+        except PhoneCodeExpired:
+            return await message.reply_text("❌ OTP has expired. Please try again with /string")
     
-    if user_id in user_states:
-        await cleanup_session(user_id)
-        await message.reply_text("✅ Operation cancelled.")
-    else:
-        await message.reply_text("❌ No active operation to cancel.")
+    except ListenerTimeout:
+        await message.reply_text("❌ Timeout! Please try again with /string")
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}\n\nPlease try again with /string")
 
 
 # ============ START COMMAND ============
@@ -92,215 +168,8 @@ async def start(client, message):
             await message.reply_photo(Config.START_PIC, caption=Txt.START_TXT.format(user.mention), reply_markup=button)       
         else:
             await message.reply_text(text=Txt.START_TXT.format(user.mention), reply_markup=button, disable_web_page_preview=True)
-    except UserIsBlocked:
-        print(f"User {user.id} has blocked the bot")
     except Exception as e:
         print(f"Error in start command: {e}")
-
-
-# ============ TEXT MESSAGE HANDLER (for both string session and settings input) ============
-
-@Client.on_message(filters.private & filters.text & ~filters.command(["start", "cancel", "string", "help"]))
-async def handle_text_input(client, message: Message):
-    user_id = message.from_user.id
-    
-    # Check if user is in string session generation
-    if user_id in user_states and isinstance(user_states[user_id], SessionState):
-        state = user_states[user_id]
-        text = message.text.strip()
-        await handle_string_session_steps(client, message, state, text)
-        return
-    
-    # Check if user is inputting settings (handled by settings_handler.py)
-    if user_id in user_setting_state:
-        return  # Let settings_handler.py handle this
-
-
-
-async def handle_string_session_steps(client, message, state, text):
-    """Handle string session generation steps"""
-    user_id = message.from_user.id
-    
-    try:
-        # Step 1: Receive API_ID
-        if state.step == "api_id":
-            if not text.isdigit():
-                await message.reply_text("❌ API_ID must be a number. Please send a valid API_ID:")
-                return
-            
-            state.api_id = int(text)
-            state.step = "api_hash"
-            await message.reply_text("✅ API_ID received!\n\nNow send your <b>API_HASH</b>")
-        
-        # Step 2: Receive API_HASH
-        elif state.step == "api_hash":
-            state.api_hash = text
-            state.step = "phone"
-            await message.reply_text(
-                "✅ API_HASH received!\n\n"
-                "Now send your <b>Phone Number</b> with country code\n"
-                "Example: +1234567890"
-            )
-        
-        # Step 3: Receive Phone Number
-        elif state.step == "phone":
-            state.phone = text
-            
-            try:
-                from pyrogram import Client as PyroClient
-                state.client = PyroClient(
-                    name=f"session_{user_id}",
-                    api_id=state.api_id,
-                    api_hash=state.api_hash,
-                    in_memory=True
-                )
-                
-                await state.client.connect()
-                code = await state.client.send_code(state.phone)
-                state.phone_code_hash = code.phone_code_hash
-                state.step = "otp"
-                
-                await message.reply_text(
-                    "✅ OTP sent to your Telegram account!\n\n"
-                    "Please send the <b>OTP code</b> you received.\n"
-                    "Example: 12345"
-                )
-                
-            except ApiIdInvalid:
-                await message.reply_text("❌ Invalid API_ID or API_HASH. Please start again with /string")
-                await cleanup_session(user_id)
-            except PhoneNumberInvalid:
-                await message.reply_text("❌ Invalid phone number. Please start again with /string")
-                await cleanup_session(user_id)
-            except Exception as e:
-                await message.reply_text(f"❌ Error: {str(e)}\n\nPlease start again with /string")
-                await cleanup_session(user_id)
-        
-        # Step 4: Receive OTP
-        elif state.step == "otp":
-            otp = text.replace(" ", "")
-            
-            try:
-                await state.client.sign_in(state.phone, state.phone_code_hash, otp)
-                string_session = await state.client.export_session_string()
-                
-                await message.reply_text(
-                    "✅ <b>String Session Generated Successfully!</b>\n\n"
-                    f"<code>{string_session}</code>\n\n"
-                    "⚠️ <b>Keep this safe and never share it with anyone!</b>",
-                    disable_web_page_preview=True
-                )
-                
-                await cleanup_session(user_id)
-                
-            except PhoneCodeInvalid:
-                await message.reply_text("❌ Invalid OTP code. Please try again.\nSend the correct OTP:")
-            except PhoneCodeExpired:
-                await message.reply_text("❌ OTP has expired. Please start again with /string")
-                await cleanup_session(user_id)
-            except SessionPasswordNeeded:
-                state.step = "2fa"
-                await message.reply_text("🔐 Your account has 2FA enabled.\n\nPlease send your <b>2FA Password</b>:")
-            except Exception as e:
-                await message.reply_text(f"❌ Error: {str(e)}")
-                await cleanup_session(user_id)
-        
-        # Step 5: Receive 2FA Password
-        elif state.step == "2fa":
-            try:
-                await state.client.check_password(text)
-                string_session = await state.client.export_session_string()
-                
-                await message.reply_text(
-                    "✅ <b>String Session Generated Successfully!</b>\n\n"
-                    f"<code>{string_session}</code>\n\n"
-                    "⚠️ <b>Keep this safe and never share it with anyone!</b>",
-                    disable_web_page_preview=True
-                )
-                
-                await cleanup_session(user_id)
-                
-            except PasswordHashInvalid:
-                await message.reply_text("❌ Invalid 2FA password. Please try again.\nSend the correct password:")
-            except Exception as e:
-                await message.reply_text(f"❌ Error: {str(e)}")
-                await cleanup_session(user_id)
-    
-    except Exception as e:
-        await message.reply_text(f"❌ Error: {str(e)}")
-        await cleanup_session(user_id)
-
-
-async def handle_settings_input_data(client, message, setting_type, text):
-    """Handle settings input (prefix, suffix, remove/replace words)"""
-    user_id = message.from_user.id
-    
-    try:
-        if setting_type == "prefix":
-            await db.set_prefix(user_id, text)
-            await message.reply_text(
-                f"✅ **Prefix Set:** `{text}`",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
-                ]])
-            )
-        
-        elif setting_type == "suffix":
-            await db.set_suffix(user_id, text)
-            await message.reply_text(
-                f"✅ **Suffix Set:** `{text}`",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
-                ]])
-            )
-        
-        elif setting_type == "remove_words":
-            words = [w.strip() for w in text.split(',') if w.strip()]
-            await db.set_remove_words(user_id, words)
-            await message.reply_text(
-                f"✅ **Remove Words Set ({len(words)} words):**\n`{', '.join(words)}`",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
-                ]])
-            )
-        
-        elif setting_type == "replace_words":
-            pairs = [p.strip() for p in text.split(',')]
-            replace_dict = {}
-            
-            for pair in pairs:
-                if ':' in pair:
-                    parts = pair.split(':', 1)
-                    if len(parts) == 2:
-                        old, new = parts[0].strip(), parts[1].strip()
-                        if old and new:
-                            replace_dict[old] = new
-            
-            if replace_dict:
-                await db.set_replace_words(user_id, replace_dict)
-                words_display = '\n'.join([f"• {k} → {v}" for k, v in replace_dict.items()])
-                await message.reply_text(
-                    f"✅ **Replace Words Set ({len(replace_dict)} pairs):**\n\n{words_display}",
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
-                    ]])
-                )
-            else:
-                await message.reply_text(
-                    "❌ **Invalid Format!**\n\nUse: `old:new, old2:new2`",
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("◀️ Back to Settings", callback_data="auto_settings")
-                    ]])
-                )
-        
-        # Clear state
-        del user_states[user_id]
-    
-    except Exception as e:
-        print(f"Error processing settings input: {e}")
-        await message.reply_text(f"❌ **Error:** {e}")
-        if user_id in user_states:
-            del user_states[user_id]
 
 
 # ============ CALLBACK QUERY HANDLER ============
@@ -323,7 +192,19 @@ async def cb_handler(client, query: CallbackQuery):
                     ]])
             )
         
-        elif data == "settings":
+        elif data == "clear_replace_words":
+            await db.set_replace_words(user_id, {})
+            await query.answer("✅ Replace Words Cleared", show_alert=True)
+        
+        await show_auto_settings(client, query)
+    except Exception as e:
+        print(f"Error in clear: {e}")
+
+
+@Client.on_message(filters.private & filters.command("cancel"))
+async def cancel_command(client, message):
+    """Cancel command - stops any ongoing operation"""
+    await message.reply_text("✅ Send /start to use the bot") "settings":
             await query.message.edit_text(
                 text=Txt.SETTINGS_TXT.format(client.mention),
                 disable_web_page_preview=True,
@@ -341,174 +222,102 @@ async def cb_handler(client, query: CallbackQuery):
                 ]])            
             )
         
+        elif data == "cap":
+            await query.message.edit_text(
+                text=Txt.CAP_TXT,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="settings")
+                ]])
+            )
+        
+        elif data == "thumbnail":
+            await query.message.edit_text(
+                text=Txt.THUMBNAIL_TXT,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("◀️ Bᴀᴄᴋ", callback_data="settings")
+                ]])
+            )
+        
         elif data == "upload_settings":
-            try:
-                upload_as = await db.get_upload_as(user_id)
-                upload_channel = await db.get_upload_channel(user_id)
-                
-                upload_type_text = {
-                    "document": "📁 Document", 
-                    "video": "🎥 Video", 
-                    "audio": "🎵 Audio"
-                }.get(upload_as, "📁 Document")
-                
-                channel_text = f"Set: `{upload_channel}`" if upload_channel else "Not Set"
-                
-                await query.message.edit_text(
-                    text=f"**📤 Upload Settings**\n\n**Upload As:** {upload_type_text}\n**Channel:** {channel_text}",
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("📁 Document", callback_data="upload_type_document"),
-                        InlineKeyboardButton("🎥 Video", callback_data="upload_type_video")
-                    ],[
-                        InlineKeyboardButton("🎵 Audio", callback_data="upload_type_audio")
-                    ],[
-                        InlineKeyboardButton("📢 Set Channel", callback_data="set_upload_channel")
-                    ],[
-                        InlineKeyboardButton("◀️ Back", callback_data="settings")
-                    ]])
-                )
-            except Exception as e:
-                print(f"Error in upload_settings: {e}")
-                await query.answer(f"❌ Error: {e}", show_alert=True)
-            
+            await show_upload_settings(client, query)
+        
         elif data.startswith("upload_type_"):
             upload_type = data.replace("upload_type_", "")
             await db.set_upload_as(user_id, upload_type)
             await query.answer(f"✅ Upload as {upload_type.upper()}", show_alert=True)
-            
-            # Refresh upload settings page
-            await query.message.edit_text(
-                text="♻️ Refreshing...",
-                reply_markup=None
-            )
-            
-            # Call upload_settings again to refresh
-            from pyrogram.types import CallbackQuery as CQ
-            refresh_query = type('obj', (object,), {
-                'data': 'upload_settings',
-                'from_user': query.from_user,
-                'message': query.message,
-                'id': query.id
-            })()
-            await cb_handler(client, refresh_query)
+            await show_upload_settings(client, query)
         
         elif data == "set_upload_channel":
-            user_setting_state[user_id] = "upload_channel"
-            await query.message.edit_text(
-                "**📢 Send Channel ID or Username:**\n\n"
-                "Examples:\n"
-                "• `-1001234567890`\n"
-                "• `@username`\n\n"
-                "Send /cancel to cancel",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Clear Channel", callback_data="clear_upload_channel")
-                ],[
-                    InlineKeyboardButton("◀️ Back", callback_data="upload_settings")
-                ]])
-            )
+            try:
+                channel_msg = await client.ask(
+                    chat_id=user_id,
+                    text="**📢 Send Channel ID or Username:**\n\n"
+                         "Examples:\n"
+                         "• `-1001234567890`\n"
+                         "• `@username`\n\n"
+                         "Send /cancel to cancel",
+                    timeout=300
+                )
+                
+                if channel_msg.text == "/cancel":
+                    await channel_msg.reply_text("✅ Cancelled")
+                    return await show_upload_settings(client, query)
+                
+                channel_id = channel_msg.text.strip()
+                if channel_id.startswith('@'):
+                    pass
+                elif channel_id.lstrip('-').isdigit():
+                    channel_id = int(channel_id)
+                else:
+                    await channel_msg.reply_text("❌ Invalid format")
+                    return await show_upload_settings(client, query)
+                
+                await db.set_upload_channel(user_id, channel_id)
+                await channel_msg.reply_text(f"✅ **Channel Set:** `{channel_id}`")
+                await show_upload_settings(client, query)
+                
+            except ListenerTimeout:
+                await query.message.reply_text("❌ Timeout!")
+                await show_upload_settings(client, query)
         
         elif data == "clear_upload_channel":
             await db.set_upload_channel(user_id, None)
             await query.answer("✅ Channel Cleared", show_alert=True)
-            if user_id in user_setting_state:
-                del user_setting_state[user_id]
-            
-            # Refresh page
-            from pyrogram.types import CallbackQuery as CQ
-            refresh_query = type('obj', (object,), {
-                'data': 'upload_settings',
-                'from_user': query.from_user,
-                'message': query.message,
-                'id': query.id
-            })()
-            await cb_handler(client, refresh_query)
+            await show_upload_settings(client, query)
         
         elif data == "rename_mode":
-            current_mode = await db.get_rename_mode(user_id)
-            always_ask = await db.get_always_ask(user_id)
-            mode_emoji = "🤖" if current_mode == "auto" else "📝"
-            ask_emoji = "✅" if always_ask else "❌"
-            
-            await query.message.edit_text(
-                text=f"**🔧 Rename Mode Settings**\n\n**Current Mode:** {mode_emoji} {current_mode.upper()}\n**Always Ask:** {ask_emoji}",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📝 Manual", callback_data="set_manual_mode"),
-                    InlineKeyboardButton("🤖 Auto", callback_data="set_auto_mode")
-                    ],[
-                    InlineKeyboardButton(f"{ask_emoji} Confirm", callback_data="toggle_always_ask")
-                    ],[
-                    InlineKeyboardButton("⚙️ Auto Settings", callback_data="auto_settings")
-                    ],[
-                    InlineKeyboardButton("◀️ Back", callback_data="settings")
-                ]])
-            )
+            await show_rename_mode(client, query)
         
         elif data == "set_manual_mode":
             await db.set_rename_mode(user_id, "manual")
             await query.answer("✅ Manual Mode Enabled", show_alert=True)
-            # Refresh
-            refresh_query = type('obj', (object,), {
-                'data': 'rename_mode',
-                'from_user': query.from_user,
-                'message': query.message,
-                'id': query.id
-            })()
-            await cb_handler(client, refresh_query)
+            await show_rename_mode(client, query)
         
         elif data == "set_auto_mode":
             await db.set_rename_mode(user_id, "auto")
             await query.answer("✅ Auto Mode Enabled", show_alert=True)
-            # Refresh
-            refresh_query = type('obj', (object,), {
-                'data': 'rename_mode',
-                'from_user': query.from_user,
-                'message': query.message,
-                'id': query.id
-            })()
-            await cb_handler(client, refresh_query)
-        
-        elif data == "toggle_always_ask":
-            current = await db.get_always_ask(user_id)
-            await db.set_always_ask(user_id, not current)
-            await query.answer(f"✅ Confirm: {'ON' if not current else 'OFF'}", show_alert=True)
-            # Refresh
-            refresh_query = type('obj', (object,), {
-                'data': 'rename_mode',
-                'from_user': query.from_user,
-                'message': query.message,
-                'id': query.id
-            })()
-            await cb_handler(client, refresh_query)
+            await show_rename_mode(client, query)
         
         elif data == "auto_settings":
             await show_auto_settings(client, query)
         
-        elif data in ["toggle_auto_detect_all", "toggle_auto_clean"]:
-            await handle_toggle(client, query, data)
-        
-        elif data == "set_quality":
-            await query.message.edit_text(
-                text="**🎞️ Select Quality Format:**",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("Keep Original", callback_data="quality_keep"),
-                    InlineKeyboardButton("Remove", callback_data="quality_remove")
-                    ],[
-                    InlineKeyboardButton("480p", callback_data="quality_480p"),
-                    InlineKeyboardButton("720p", callback_data="quality_720p"),
-                    InlineKeyboardButton("1080p", callback_data="quality_1080p")
-                    ],[
-                    InlineKeyboardButton("◀️ Back", callback_data="auto_settings")
-                ]])
-            )
-        
-        elif data.startswith("quality_"):
-            quality = data.split("_")[1]
-            await db.set_quality_format(user_id, quality)
-            await query.answer(f"✅ Quality: {quality.upper()}", show_alert=True)
+        elif data == "toggle_auto_clean":
+            current = await db.get_auto_clean(user_id)
+            await db.set_auto_clean(user_id, not current)
+            await query.answer(f"✅ Auto Clean: {'ON' if not current else 'OFF'}", show_alert=True)
             await show_auto_settings(client, query)
         
-        elif data in ["set_prefix", "set_suffix", "set_remove_words", "set_replace_words"]:
-            await initiate_input(client, query, data)
+        elif data == "set_prefix":
+            await handle_prefix_input(client, query)
+        
+        elif data == "set_suffix":
+            await handle_suffix_input(client, query)
+        
+        elif data == "set_remove_words":
+            await handle_remove_words_input(client, query)
+        
+        elif data == "set_replace_words":
+            await handle_replace_words_input(client, query)
         
         elif data in ["clear_prefix", "clear_suffix", "clear_remove_words", "clear_replace_words"]:
             await handle_clear(client, query, data)
@@ -531,17 +340,68 @@ async def cb_handler(client, query: CallbackQuery):
             pass
 
 
+async def show_upload_settings(client, query):
+    """Show upload settings page"""
+    try:
+        user_id = query.from_user.id
+        upload_as = await db.get_upload_as(user_id)
+        upload_channel = await db.get_upload_channel(user_id)
+        
+        upload_type_text = {
+            "document": "📁 Document", 
+            "video": "🎥 Video", 
+            "audio": "🎵 Audio"
+        }.get(upload_as, "📁 Document")
+        
+        channel_text = f"Set: `{upload_channel}`" if upload_channel else "Not Set"
+        
+        await query.message.edit_text(
+            text=f"**📤 Upload Settings**\n\n**Upload As:** {upload_type_text}\n**Channel:** {channel_text}",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📁 Document", callback_data="upload_type_document"),
+                InlineKeyboardButton("🎥 Video", callback_data="upload_type_video")
+            ],[
+                InlineKeyboardButton("🎵 Audio", callback_data="upload_type_audio")
+            ],[
+                InlineKeyboardButton("📢 Set Channel", callback_data="set_upload_channel"),
+                InlineKeyboardButton("❌ Clear", callback_data="clear_upload_channel")
+            ],[
+                InlineKeyboardButton("◀️ Back", callback_data="settings")
+            ]])
+        )
+    except Exception as e:
+        print(f"Error in show_upload_settings: {e}")
+
+
+async def show_rename_mode(client, query):
+    """Show rename mode settings"""
+    try:
+        user_id = query.from_user.id
+        current_mode = await db.get_rename_mode(user_id)
+        mode_emoji = "🤖" if current_mode == "auto" else "📝"
+        
+        await query.message.edit_text(
+            text=f"**🔧 Rename Mode Settings**\n\n**Current Mode:** {mode_emoji} {current_mode.upper()}",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📝 Manual", callback_data="set_manual_mode"),
+                InlineKeyboardButton("🤖 Auto", callback_data="set_auto_mode")
+                ],[
+                InlineKeyboardButton("⚙️ Auto Settings", callback_data="auto_settings")
+                ],[
+                InlineKeyboardButton("◀️ Back", callback_data="settings")
+            ]])
+        )
+    except Exception as e:
+        print(f"Error in show_rename_mode: {e}")
+
+
 async def show_auto_settings(client, query):
     """Show auto settings page"""
     try:
         user_id = query.from_user.id
         settings = await db.get_all_rename_settings(user_id)
         
-        # Single toggle for all auto detection
-        auto_detect = settings['auto_detect_language'] and settings['auto_detect_year'] and settings['auto_detect_quality']
-        detect_emoji = "✅" if auto_detect else "❌"
         auto_clean = "✅" if settings['auto_clean'] else "❌"
-        quality = settings['quality_format']
         prefix = settings['prefix'][:20] if settings['prefix'] else "None"
         suffix = settings['suffix'][:20] if settings['suffix'] else "None"
         
@@ -550,9 +410,7 @@ async def show_auto_settings(client, query):
         
         text = f"""**⚙️ Auto Rename Settings**
 
-**Auto Detect:** {detect_emoji} (Year, Lang, Quality, etc.)
-**Auto Clean:** {auto_clean}
-**Quality:** {quality}
+**Auto Clean:** {auto_clean} (Remove junk words)
 
 **Customization:**
 ├ Prefix: `{prefix}`
@@ -563,10 +421,7 @@ async def show_auto_settings(client, query):
         await query.message.edit_text(
             text=text,
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(f"{detect_emoji} Auto Detect", callback_data="toggle_auto_detect_all"),
-                InlineKeyboardButton(f"{auto_clean} Clean", callback_data="toggle_auto_clean")
-                ],[
-                InlineKeyboardButton("🎞️ Quality", callback_data="set_quality")
+                InlineKeyboardButton(f"{auto_clean} Auto Clean", callback_data="toggle_auto_clean")
                 ],[
                 InlineKeyboardButton("➕ Prefix", callback_data="set_prefix"),
                 InlineKeyboardButton("➕ Suffix", callback_data="set_suffix")
@@ -581,57 +436,121 @@ async def show_auto_settings(client, query):
         print(f"Error showing auto settings: {e}")
 
 
-async def handle_toggle(client, query, data):
-    """Handle toggle callbacks"""
+async def handle_prefix_input(client, query):
+    """Handle prefix input using bot.ask()"""
     try:
         user_id = query.from_user.id
         
-        if data == "toggle_auto_detect_all":
-            # Toggle all detection settings at once
-            current = await db.get_auto_detect_language(user_id)
-            new_value = not current
-            await db.set_auto_detect_type(user_id, new_value)
-            await db.set_auto_detect_language(user_id, new_value)
-            await db.set_auto_detect_year(user_id, new_value)
-            await db.set_auto_detect_quality(user_id, new_value)
-            await db.set_auto_detect_source(user_id, new_value)
-            await db.set_auto_detect_ott(user_id, new_value)
-            await db.set_auto_detect_encoding(user_id, new_value)
-            await db.set_auto_detect_audio(user_id, new_value)
-            await query.answer(f"✅ Auto Detect: {'ON' if new_value else 'OFF'}", show_alert=True)
-        elif data == "toggle_auto_clean":
-            current = await db.get_auto_clean(user_id)
-            await db.set_auto_clean(user_id, not current)
-            await query.answer(f"✅ Auto Clean: {'ON' if not current else 'OFF'}", show_alert=True)
+        prefix_msg = await client.ask(
+            chat_id=user_id,
+            text="**➕ Send me the prefix:**\n\nExample: `@YourChannel`\n\nSend /cancel to cancel",
+            timeout=300
+        )
+        
+        if prefix_msg.text == "/cancel":
+            await prefix_msg.reply_text("✅ Cancelled")
+            return await show_auto_settings(client, query)
+        
+        await db.set_prefix(user_id, prefix_msg.text)
+        await prefix_msg.reply_text(f"✅ **Prefix Set:** `{prefix_msg.text}`")
+        await show_auto_settings(client, query)
+        
+    except ListenerTimeout:
+        await query.message.reply_text("❌ Timeout!")
+        await show_auto_settings(client, query)
+
+
+async def handle_suffix_input(client, query):
+    """Handle suffix input using bot.ask()"""
+    try:
+        user_id = query.from_user.id
+        
+        suffix_msg = await client.ask(
+            chat_id=user_id,
+            text="**➕ Send me the suffix:**\n\nExample: `@YourChannel`\n\nSend /cancel to cancel",
+            timeout=300
+        )
+        
+        if suffix_msg.text == "/cancel":
+            await suffix_msg.reply_text("✅ Cancelled")
+            return await show_auto_settings(client, query)
+        
+        await db.set_suffix(user_id, suffix_msg.text)
+        await suffix_msg.reply_text(f"✅ **Suffix Set:** `{suffix_msg.text}`")
+        await show_auto_settings(client, query)
+        
+    except ListenerTimeout:
+        await query.message.reply_text("❌ Timeout!")
+        await show_auto_settings(client, query)
+
+
+async def handle_remove_words_input(client, query):
+    """Handle remove words input using bot.ask()"""
+    try:
+        user_id = query.from_user.id
+        
+        remove_msg = await client.ask(
+            chat_id=user_id,
+            text="**🗑️ Send words to remove (comma separated):**\n\nExample: `hdcam, sample, x264, torrent`\n\nSend /cancel to cancel",
+            timeout=300
+        )
+        
+        if remove_msg.text == "/cancel":
+            await remove_msg.reply_text("✅ Cancelled")
+            return await show_auto_settings(client, query)
+        
+        words = [w.strip() for w in remove_msg.text.split(',') if w.strip()]
+        if words:
+            await db.set_remove_words(user_id, words)
+            await remove_msg.reply_text(f"✅ **Remove Words Set ({len(words)} words):**\n`{', '.join(words)}`")
+        else:
+            await remove_msg.reply_text("❌ No valid words provided")
         
         await show_auto_settings(client, query)
-    except Exception as e:
-        print(f"Error in toggle: {e}")
+        
+    except ListenerTimeout:
+        await query.message.reply_text("❌ Timeout!")
+        await show_auto_settings(client, query)
 
 
-async def initiate_input(client, query, data):
-    """Initiate input for prefix/suffix/remove/replace"""
+async def handle_replace_words_input(client, query):
+    """Handle replace words input using bot.ask()"""
     try:
         user_id = query.from_user.id
-        setting = data.replace("set_", "")
         
-        user_setting_state[user_id] = setting
-        
-        messages = {
-            "prefix": "**➕ Send me the prefix:**\n\nExample: `@YourChannel`\n\nSend /cancel to cancel",
-            "suffix": "**➕ Send me the suffix:**\n\nExample: `@YourChannel`\n\nSend /cancel to cancel",
-            "remove_words": "**🗑️ Send words to remove (comma separated):**\n\nExample: `hdcam, sample, x264, torrent`\n\nSend /cancel to cancel",
-            "replace_words": "**🔄 Send replacement pairs:**\n\nFormat: `old:new, old2:new2`\n\nExample: `tamil:kannada, english:hindi, 480p:720p`\n\nSend /cancel to cancel"
-        }
-        
-        await query.message.edit_text(
-            messages[setting],
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("❌ Clear & Back", callback_data=f"clear_{setting}")
-            ]])
+        replace_msg = await client.ask(
+            chat_id=user_id,
+            text="**🔄 Send replacement pairs:**\n\nFormat: `old:new, old2:new2`\n\nExample: `tamil:kannada, 480p:720p`\n\nSend /cancel to cancel",
+            timeout=300
         )
-    except Exception as e:
-        print(f"Error initiating input: {e}")
+        
+        if replace_msg.text == "/cancel":
+            await replace_msg.reply_text("✅ Cancelled")
+            return await show_auto_settings(client, query)
+        
+        pairs = [p.strip() for p in replace_msg.text.split(',')]
+        replace_dict = {}
+        
+        for pair in pairs:
+            if ':' in pair:
+                parts = pair.split(':', 1)
+                if len(parts) == 2:
+                    old, new = parts[0].strip(), parts[1].strip()
+                    if old and new:
+                        replace_dict[old] = new
+        
+        if replace_dict:
+            await db.set_replace_words(user_id, replace_dict)
+            words_display = '\n'.join([f"• {k} → {v}" for k, v in replace_dict.items()])
+            await replace_msg.reply_text(f"✅ **Replace Words Set ({len(replace_dict)} pairs):**\n\n{words_display}")
+        else:
+            await replace_msg.reply_text("❌ **Invalid Format!**\n\nUse: `old:new, old2:new2`")
+        
+        await show_auto_settings(client, query)
+        
+    except ListenerTimeout:
+        await query.message.reply_text("❌ Timeout!")
+        await show_auto_settings(client, query)
 
 
 async def handle_clear(client, query, data):
@@ -648,13 +567,4 @@ async def handle_clear(client, query, data):
         elif data == "clear_remove_words":
             await db.set_remove_words(user_id, [])
             await query.answer("✅ Remove Words Cleared", show_alert=True)
-        elif data == "clear_replace_words":
-            await db.set_replace_words(user_id, {})
-            await query.answer("✅ Replace Words Cleared", show_alert=True)
-        
-        if user_id in user_setting_state:
-            del user_setting_state[user_id]
-        
-        await show_auto_settings(client, query)
-    except Exception as e:
-        print(f"Error in clear: {e}")
+        elif data ==
